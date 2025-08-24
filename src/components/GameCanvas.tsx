@@ -9,7 +9,8 @@ import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWa
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
-import { updateFPS, renderFPS } from '../utils/fpsUtils'
+import { updateFPS, renderFPS, renderTurnCounter } from '../utils/fpsUtils'
+import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat } from '../utils/combatUtils'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig'
 import { TEXT_PRIMARY } from '../config/palette'
 
@@ -37,9 +38,16 @@ const GameCanvas: React.FC = () => {
   // })
 
   // Game update function
-  const updateGame = useCallback((_deltaTime: number) => {
+  const updateGame = useCallback((deltaTime: number) => {
     // Update game logic here
     // This runs at fixed timestep (60 FPS)
+    updateFPS() // Update FPS tracking
+    updateCombat(deltaTime) // Update combat system
+    
+    // Auto-start combat when units are placed
+    if (shouldAutoStartCombat()) {
+      startCombat()
+    }
   }, [])
 
   // Render function
@@ -49,9 +57,6 @@ const GameCanvas: React.FC = () => {
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
-    // Update FPS tracking
-    updateFPS()
 
     // Render deterministic Voronoi noise background
     renderNoiseBackground(ctx)
@@ -82,8 +87,14 @@ const GameCanvas: React.FC = () => {
     // Render cursor sprite if unit is selected (using immediate mouse position)
     renderCursorSprite(ctx, mousePositionRef.current.x, mousePositionRef.current.y)
 
+    // Render combat effects (attack animations, hit effects, projectiles)
+    renderCombatEffects(ctx)
+
     // Render FPS display
     renderFPS(ctx)
+    
+    // Render turn counter
+    renderTurnCounter(ctx, getCurrentTurn())
   }, [fontLoaded]) // Removed mousePos dependency - now using ref
 
   // Initialize canvas and game loop
@@ -100,7 +111,8 @@ const GameCanvas: React.FC = () => {
       loadGameFont(),
       preloadImages([
         '/src/assets/images/swordsman.png',
-        '/src/assets/images/bowman.png'
+        '/src/assets/images/bowman.png',
+        '/src/assets/images/arrow.png' // Preload arrow for projectiles
       ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {

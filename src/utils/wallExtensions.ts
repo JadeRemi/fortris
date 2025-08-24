@@ -114,6 +114,31 @@ export const isWallCellOccupied = (wallType: 'left' | 'right' | 'bottom', cellIn
 }
 
 /**
+ * Get a specific wall cell
+ */
+export const getWallCell = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): WallCell | null => {
+  let cells: WallCell[]
+  
+  switch (wallType) {
+    case 'left':
+      cells = leftWallCells
+      break
+    case 'right':
+      cells = rightWallCells
+      break
+    case 'bottom':
+      cells = bottomWallCells
+      break
+  }
+  
+  if (cellIndex < 0 || cellIndex >= cells.length) {
+    return null
+  }
+  
+  return cells[cellIndex]
+}
+
+/**
  * Get wall cell coordinates
  */
 export const getWallCellCoordinates = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): { x: number; y: number } | null => {

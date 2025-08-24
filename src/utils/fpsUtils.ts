@@ -89,3 +89,29 @@ export const renderFPS = (ctx: CanvasRenderingContext2D): void => {
   
   ctx.restore()
 }
+
+/**
+ * Render turn counter display on canvas (next to FPS)
+ */
+export const renderTurnCounter = (ctx: CanvasRenderingContext2D, turnNumber: number): void => {
+  if (turnNumber <= 0) return // Don't display if no turns have started
+  
+  ctx.save()
+  
+  // Position next to FPS display
+  const x = 130 // Right of FPS display
+  const y = 40
+  
+  // Background for better readability
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x - 10, y - 25, 110, 35)
+  
+  // Turn counter text
+  ctx.fillStyle = '#FFD700' // Gold color for turn counter
+  ctx.font = '16px monospace'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText(`Turn: ${turnNumber}`, x, y - 20)
+  
+  ctx.restore()
+}
