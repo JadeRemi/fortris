@@ -26,19 +26,19 @@ interface GlobalSelectionState {
   cursorSprite: HTMLImageElement | null
 }
 
-let swordsmanState: ArmyUnitState = {
+export let swordsmanState: ArmyUnitState = {
   isSelected: false,
   selectionStartTime: 0,
   count: INITIAL_SWORDSMAN_COUNT
 }
 
-let bowmanState: ArmyUnitState = {
+export let bowmanState: ArmyUnitState = {
   isSelected: false,
   selectionStartTime: 0,
   count: INITIAL_BOWMAN_COUNT
 }
 
-let globalSelection: GlobalSelectionState = {
+export let globalSelection: GlobalSelectionState = {
   isUnitSelected: false,
   selectedUnitType: null,
   cursorSprite: null
@@ -568,4 +568,17 @@ export const isPointInBowmanCell = (x: number, y: number): boolean => {
  */
 export const isPointInAnyUnitCell = (x: number, y: number): boolean => {
   return isPointInSwordsmanCell(x, y) || isPointInBowmanCell(x, y)
+}
+
+/**
+ * Reset all army unit states to initial values (for game restart)
+ */
+export const resetArmyStates = (): void => {
+  swordsmanState.isSelected = false
+  swordsmanState.selectionStartTime = 0
+  swordsmanState.count = INITIAL_SWORDSMAN_COUNT
+  
+  bowmanState.isSelected = false
+  bowmanState.selectionStartTime = 0
+  bowmanState.count = INITIAL_BOWMAN_COUNT
 }

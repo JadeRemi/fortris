@@ -1,7 +1,8 @@
 // Wall extensions for unit placement
 import { WallCell } from '../types/walls'
 import { getCachedImage } from './imageUtils'
-import { UNIT_TYPES } from '../config/unitsConfig'
+import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
+import { renderEnemyHealthNumbers } from './enemyUtils'
 import {
   LEVEL_HEIGHT,
   LEVEL_WIDTH,
@@ -85,6 +86,11 @@ export const placeUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIndex
   
   cell.isOccupied = true
   cell.occupiedBy = unitTypeId
+  
+  // Set initial health based on unit type
+  const unitType = getUnitById(unitTypeId)
+  cell.currentHealth = unitType?.maxHealth || 10
+  
   return true
 }
 
@@ -326,4 +332,93 @@ export const getBottomWallCellIndex = (x: number, y: number): number => {
   }
   
   return -1
+}
+
+/**
+ * Clear all placed units from all wall cells (for game restart)
+ */
+export const clearAllWallCells = (): void => {
+  // Clear left wall
+  for (const cell of leftWallCells) {
+    cell.occupiedBy = undefined
+    cell.currentHealth = undefined
+  }
+  
+  // Clear right wall  
+  for (const cell of rightWallCells) {
+    cell.occupiedBy = undefined
+    cell.currentHealth = undefined
+  }
+  
+  // Clear bottom wall
+  for (const cell of bottomWallCells) {
+    cell.occupiedBy = undefined
+    cell.currentHealth = undefined
+  }
+}
+
+/**
+ * Render health numbers on all placed units
+ */
+export const renderUnitHealthNumbers = (ctx: CanvasRenderingContext2D): void => {
+  ctx.save()
+  ctx.fillStyle = '#FFFFFF'
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = 2
+  ctx.font = '14px "Pixelify Sans", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  
+  // Render health on left wall units
+  for (let i = 0; i < leftWallCells.length; i++) {
+    const cell = leftWallCells[i]
+    if (cell.occupiedBy && cell.currentHealth !== undefined) {
+      const coords = getWallCellCoordinates('left', i)
+      if (coords) {
+        const centerX = coords.x + WALL_CELL_SIZE / 2
+        const topY = coords.y + 2 // Small offset from top
+        
+        // Draw stroke first, then fill
+        ctx.strokeText(cell.currentHealth.toString(), centerX, topY)
+        ctx.fillText(cell.currentHealth.toString(), centerX, topY)
+      }
+    }
+  }
+  
+  // Render health on right wall units
+  for (let i = 0; i < rightWallCells.length; i++) {
+    const cell = rightWallCells[i]
+    if (cell.occupiedBy && cell.currentHealth !== undefined) {
+      const coords = getWallCellCoordinates('right', i)
+      if (coords) {
+        const centerX = coords.x + WALL_CELL_SIZE / 2
+        const topY = coords.y + 2 // Small offset from top
+        
+        // Draw stroke first, then fill
+        ctx.strokeText(cell.currentHealth.toString(), centerX, topY)
+        ctx.fillText(cell.currentHealth.toString(), centerX, topY)
+      }
+    }
+  }
+  
+  // Render health on bottom wall units
+  for (let i = 0; i < bottomWallCells.length; i++) {
+    const cell = bottomWallCells[i]
+    if (cell.occupiedBy && cell.currentHealth !== undefined) {
+      const coords = getWallCellCoordinates('bottom', i)
+      if (coords) {
+        const centerX = coords.x + WALL_CELL_SIZE / 2
+        const topY = coords.y + 2 // Small offset from top
+        
+        // Draw stroke first, then fill
+        ctx.strokeText(cell.currentHealth.toString(), centerX, topY)
+        ctx.fillText(cell.currentHealth.toString(), centerX, topY)
+      }
+    }
+  }
+  
+  ctx.restore()
+  
+  // Also render enemy health numbers
+  renderEnemyHealthNumbers(ctx)
 }

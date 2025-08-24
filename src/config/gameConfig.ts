@@ -10,7 +10,8 @@ export const TICK_RATE = 1000 / TARGET_FPS // ~16.67ms per frame
 
 // Level dimensions
 export const LEVEL_WIDTH = 12  // Main battlefield width in cells
-export const LEVEL_HEIGHT = 12 // Main battlefield height in cells
+export const LEVEL_HEIGHT = 12 // Main battlefield height in cells (visible)
+export const LEVEL_NEGATIVE_ROWS = 2 // Number of negative rows above battlefield (for enemy spawning)
 
 // Battlefield settings
 export const BATTLEFIELD_ROWS = LEVEL_HEIGHT
@@ -27,6 +28,8 @@ export const WALL_BORDER_WIDTH = 2
 // UI sections settings
 export const CONTROLS_WIDTH = 200 // Width of controls section on right side
 export const CONTROLS_MARGIN = 30 // Gap between controls and canvas edge
+export const LOGS_WIDTH = 200 // Width of logs section (same as controls)
+export const LOGS_MARGIN = 20 // Gap between logs and controls section
 export const ARMY_WIDTH = 200 // Width of army section on left side (symmetrical)
 export const ARMY_MARGIN = 30 // Gap between army section and canvas edge
 
@@ -70,6 +73,8 @@ export const ARMY_X = ARMY_MARGIN // Army section from left edge
 export const ARMY_Y = BATTLEFIELD_Y
 export const CONTROLS_X = CANVAS_WIDTH - CONTROLS_WIDTH - CONTROLS_MARGIN // Controls section from right edge
 export const CONTROLS_Y = BATTLEFIELD_Y
+export const LOGS_X = CONTROLS_X - LOGS_WIDTH - LOGS_MARGIN // Logs section between right wall and controls  
+export const LOGS_Y = BATTLEFIELD_Y // Same height as other sections for consistency
 
 // Army unit cell settings
 export const ARMY_UNIT_CELL_SIZE = BATTLEFIELD_CELL_SIZE // Same size as battlefield cells
@@ -103,3 +108,7 @@ export const HIT_ANIMATION_DURATION_MS = 1500 // 1.5 seconds red hit animation
 export const PROJECTILE_LIFESPAN_MS = 5000 // 5 seconds arrow lifespan
 export const PROJECTILE_SPEED = 200 // pixels per second
 export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
+
+// Enemy configuration
+export const ENEMY_SPAWN_CHANCE = 0.3 // 30% chance to spawn an enemy each turn
+export const ENEMY_HEALTH = 10 // Health for all enemies (for now)

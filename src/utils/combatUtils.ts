@@ -3,10 +3,8 @@
 import {
   LEVEL_HEIGHT,
   LEVEL_WIDTH,
-  BATTLEFIELD_X,
   BATTLEFIELD_Y,
   BATTLEFIELD_CELL_SIZE,
-  BATTLEFIELD_CELL_BORDER_WIDTH,
   LEFT_WALL_X,
   LEFT_WALL_Y,
   LEFT_WALL_HEIGHT,
@@ -31,11 +29,14 @@ import {
 import { getWallCell } from './wallExtensions'
 import { UNIT_TYPES } from '../config/unitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
+import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt } from './enemyUtils'
+import { battlefieldToCanvas } from './battlefieldUtils'
+import { addLogMessage } from './logsUtils'
 
 // Combat state management
 interface CombatState {
   isActive: boolean
-  currentTurnPhase: 'waiting' | 'acting' | 'cooldown'
+  currentTurnPhase: 'waiting' | 'ally-acting' | 'enemy-turn' | 'cooldown'
   currentUnitIndex: number
   turnStartTime: number
   lastActionTime: number
@@ -138,9 +139,11 @@ const hasUnitsPlaced = (): boolean => {
  */
 export const startCombat = () => {
   if (!hasUnitsPlaced()) {
-    console.log('Cannot start combat: No ally units placed on walls')
     return false
   }
+  
+  // Initialize battlefield for enemy tracking
+  initializeBattlefield()
   
   combatState.isActive = true
   combatState.currentTurnPhase = 'waiting'
@@ -149,7 +152,6 @@ export const startCombat = () => {
   combatState.lastActionTime = Date.now()
   combatState.turnNumber = 1
   
-  console.log('Combat system started - Turn 1')
   return true
 }
 
@@ -165,8 +167,6 @@ export const stopCombat = () => {
   attackAnimations = []
   hitAnimations = []
   projectiles = []
-  
-  console.log('Combat system stopped')
 }
 
 /**
@@ -184,35 +184,45 @@ export const updateCombat = (deltaTime: number) => {
   // Handle turn phases
   switch (combatState.currentTurnPhase) {
     case 'waiting':
-      // Wait for turn cooldown before starting actions
+      // Wait for turn cooldown before starting ally actions
       if (currentTime - combatState.turnStartTime >= TURN_COOLDOWN_MS) {
-        combatState.currentTurnPhase = 'acting'
+        combatState.currentTurnPhase = 'ally-acting'
         combatState.currentUnitIndex = 0
         combatState.lastActionTime = currentTime
       }
       break
       
-    case 'acting':
-      // Process unit actions with delays
+    case 'ally-acting':
+      // Process ally unit actions with delays
       if (currentTime - combatState.lastActionTime >= UNIT_ACTION_DELAY_MS) {
         const hasMoreUnits = processNextUnitAction(currentTime)
         if (!hasMoreUnits) {
-          // All units have acted, start cooldown
-          combatState.currentTurnPhase = 'cooldown'
+          // All ally units have acted, start enemy turn
+          combatState.currentTurnPhase = 'enemy-turn'
           combatState.turnStartTime = currentTime
         }
         combatState.lastActionTime = currentTime
       }
       break
       
+    case 'enemy-turn':
+      // Process enemy spawning and movement
+      processEnemySpawn()
+      processEnemyTurn()
+      
+      // Enemy turn is instant, go to cooldown
+      combatState.currentTurnPhase = 'cooldown'
+      combatState.turnStartTime = currentTime
+      break
+      
     case 'cooldown':
       // Wait for cooldown before starting next turn
       if (currentTime - combatState.turnStartTime >= TURN_COOLDOWN_MS) {
-        combatState.currentTurnPhase = 'acting'
+        combatState.currentTurnPhase = 'ally-acting'
         combatState.currentUnitIndex = 0
         combatState.lastActionTime = currentTime
         combatState.turnNumber += 1 // Increment turn number
-        console.log(`Starting Turn ${combatState.turnNumber}`)
+
       }
       break
   }
@@ -272,16 +282,7 @@ const getWallCellCoords = (wallType: 'left' | 'right' | 'bottom', cellIndex: num
   return { x: cellX, y: cellY }
 }
 
-/**
- * Get battlefield cell coordinates
- */
-const getBattlefieldCellCoords = (col: number, row: number) => {
-  const cellX = BATTLEFIELD_X + BATTLEFIELD_CELL_BORDER_WIDTH + 
-                col * (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_CELL_BORDER_WIDTH)
-  const cellY = BATTLEFIELD_Y + BATTLEFIELD_CELL_BORDER_WIDTH + 
-                row * (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_CELL_BORDER_WIDTH)
-  return { x: cellX, y: cellY }
-}
+
 
 /**
  * Perform unit action based on unit type and position
@@ -331,6 +332,9 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
       break
   }
   
+  // Check if there's an enemy in the target cell
+  const targetEnemy = getEnemyAt(targetCol, targetRow)
+  
   // Add hit animation
   hitAnimations.push({
     battlefieldCol: targetCol,
@@ -339,6 +343,15 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
     duration: HIT_ANIMATION_DURATION_MS,
     isActive: true
   })
+  
+  // Add combat log if an enemy was hit
+  if (targetEnemy) {
+    const attackerName = position.wallType === 'left' || position.wallType === 'right' || position.wallType === 'bottom' 
+      ? 'Swordsman' // Currently only swordsmen do melee attacks
+      : 'Unknown'
+    const damage = 1 // Fixed damage for now
+    addLogMessage(`${targetEnemy.type.name} is hit by ${attackerName} for ${damage} damage`)
+  }
 }
 
 /**
@@ -446,6 +459,7 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
  * Render all combat effects
  */
 export const renderCombatEffects = (ctx: CanvasRenderingContext2D) => {
+  renderEnemies(ctx)
   renderAttackAnimations(ctx)
   renderHitAnimations(ctx)
   renderProjectiles(ctx)
@@ -507,25 +521,33 @@ const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
       intensity = 1.0 - ((progress - 0.2) / 0.8)
     }
     
-    // Red color
-    const r = Math.floor(255 * intensity)
-    const g = 0
-    const b = 0
+    // Red color interpolation - ends at dark brown instead of black
+    const r = Math.floor(255 * Math.max(intensity, 0.3)) // Don't go below dark brown red
+    const g = Math.floor(50 * Math.max(intensity, 0.2)) // Add some green for brown tint
+    const b = Math.floor(0 * intensity)   // No blue
     
-    const coords = getBattlefieldCellCoords(anim.battlefieldCol, anim.battlefieldRow)
+    // Use battlefieldToCanvas for precise cell boundary alignment
+    const coords = battlefieldToCanvas(anim.battlefieldRow, anim.battlefieldCol)
     
     ctx.save()
     ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
-    ctx.lineWidth = 6 // Thick red border
+    const lineWidth = 6 // Thick red border
+    ctx.lineWidth = lineWidth
     
-    // Draw rounded rectangle for hit animation
+    // Draw inner rounded rectangle for hit animation 
+    // Adjust coordinates and size to draw inside the cell
+    const inset = lineWidth / 2 // Move inward by half the line width
+    const innerX = coords.x + inset
+    const innerY = coords.y + inset
+    const innerSize = BATTLEFIELD_CELL_SIZE - lineWidth
+    
     const radius = 4
     ctx.beginPath()
-    ctx.moveTo(coords.x + radius, coords.y)
-    ctx.arcTo(coords.x + BATTLEFIELD_CELL_SIZE, coords.y, coords.x + BATTLEFIELD_CELL_SIZE, coords.y + BATTLEFIELD_CELL_SIZE, radius)
-    ctx.arcTo(coords.x + BATTLEFIELD_CELL_SIZE, coords.y + BATTLEFIELD_CELL_SIZE, coords.x, coords.y + BATTLEFIELD_CELL_SIZE, radius)
-    ctx.arcTo(coords.x, coords.y + BATTLEFIELD_CELL_SIZE, coords.x, coords.y, radius)
-    ctx.arcTo(coords.x, coords.y, coords.x + BATTLEFIELD_CELL_SIZE, coords.y, radius)
+    ctx.moveTo(innerX + radius, innerY)
+    ctx.arcTo(innerX + innerSize, innerY, innerX + innerSize, innerY + innerSize, radius)
+    ctx.arcTo(innerX + innerSize, innerY + innerSize, innerX, innerY + innerSize, radius)
+    ctx.arcTo(innerX, innerY + innerSize, innerX, innerY, radius)
+    ctx.arcTo(innerX, innerY, innerX + innerSize, innerY, radius)
     ctx.closePath()
     ctx.stroke()
     
@@ -595,6 +617,33 @@ export const getCurrentTurn = (): number => {
  */
 export const shouldAutoStartCombat = (): boolean => {
   return !combatState.isActive && hasUnitsPlaced()
+}
+
+/**
+ * Skip current ally turn and proceed directly to enemy phase
+ */
+export const skipTurn = (): void => {
+  if (!combatState.isActive) return
+  
+  // Only allow skipping during ally phases (waiting or ally-acting)
+  if (combatState.currentTurnPhase !== 'waiting' && combatState.currentTurnPhase !== 'ally-acting') {
+    return
+  }
+  
+  // Skip directly to enemy phase
+  combatState.currentTurnPhase = 'enemy-turn'
+  combatState.lastActionTime = Date.now()
+  combatState.currentUnitIndex = 0
+  
+  // Process enemy spawning first
+  processEnemySpawn()
+  
+  // Then process enemy movement
+  processEnemyTurn()
+  
+  // Move to cooldown phase
+  combatState.currentTurnPhase = 'cooldown'
+  combatState.turnStartTime = Date.now()
 }
 
 /**

@@ -1,5 +1,7 @@
 // FPS tracking and display utilities
 
+import { enemies } from './enemyUtils'
+
 class FPSTracker {
   private frameCount = 0
   private lastFPSUpdateTime = performance.now()
@@ -112,6 +114,32 @@ export const renderTurnCounter = (ctx: CanvasRenderingContext2D, turnNumber: num
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
   ctx.fillText(`Turn: ${turnNumber}`, x, y - 20)
+  
+  ctx.restore()
+}
+
+/**
+ * Render enemy counter display on canvas (next to turn counter)
+ */
+export const renderEnemyCounter = (ctx: CanvasRenderingContext2D): void => {
+  const enemyCount = enemies.length
+  
+  ctx.save()
+  
+  // Position next to turn counter
+  const x = 250 // Right of turn display
+  const y = 40
+  
+  // Background for better readability
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x - 10, y - 25, 120, 35)
+  
+  // Enemy counter text
+  ctx.fillStyle = '#FF6B6B' // Red color for enemy counter
+  ctx.font = '16px monospace'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText(`Enemies: ${enemyCount}`, x, y - 20)
   
   ctx.restore()
 }
