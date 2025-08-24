@@ -27,13 +27,16 @@ import {
   PROJECTILE_SIZE_RATIO
 } from '../config/gameConfig'
 import { getWallCell } from './wallExtensions'
-import { UNIT_TYPES } from '../config/unitsConfig'
+import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
-import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy } from './enemyUtils'
+import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder } from './enemyUtils'
 import { battlefieldToCanvas } from './battlefieldUtils'
 import { addLogMessage } from './logsUtils'
 import { generateUUID } from './uuidUtils'
 import { getImagePath } from './assetUtils'
+import { addPainEffect, cleanupPainEffects } from './painEffectUtils'
+import { spawnCoin, updateCoins, renderCoins, clearCoins } from './coinUtils'
+import { spawnSlashEffect, updateSlashEffects, renderSlashEffects, clearSlashEffects } from './slashUtils'
 
 // Combat state management
 interface CombatState {
@@ -73,6 +76,7 @@ interface Projectile {
   startTime: number
   lifespan: number
   size: number
+  spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
   isActive: boolean
 }
 
@@ -166,10 +170,12 @@ export const stopCombat = () => {
   combatState.currentTurnPhase = 'waiting'
   combatState.turnNumber = 0 // Reset turn counter
   
-  // Clear all animations and projectiles
+  // Clear all animations, projectiles, coins, and slash effects
   attackAnimations = []
   hitAnimations = []
   projectiles = []
+  clearCoins()
+  clearSlashEffects()
 }
 
 /**
@@ -180,9 +186,14 @@ export const updateCombat = (deltaTime: number) => {
   
   const currentTime = Date.now()
   
-  // Update animations and projectiles
+  // Update animations, projectiles, coins, and slash effects
   updateAnimations(currentTime)
   updateProjectiles(deltaTime, currentTime)
+  updateCoins()
+  updateSlashEffects()
+  
+  // Cleanup expired pain effects
+  cleanupPainEffects()
   
   // Handle turn phases
   switch (combatState.currentTurnPhase) {
@@ -303,7 +314,8 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
   })
   
   if (unitType === UNIT_TYPES.SWORDSMAN.id) {
-    // Melee attack: strike adjacent battlefield cell
+    // Melee attack: strike adjacent battlefield cell and spawn slash effect
+    spawnSlashEffect(position.wallType, position.cellIndex)
     performMeleeAttack(position, currentTime)
   } else if (unitType === UNIT_TYPES.BOWMAN.id) {
     // Ranged attack: spawn projectile
@@ -344,9 +356,14 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
     return // Skip this attack - no target
   }
   
-  // Deal damage to the enemy
-  const damage = 1 // Fixed damage for now
+  // Deal damage to the enemy using unit's damage value
+  const wallCell = getWallCell(position.wallType, position.cellIndex)
+  const unitType = getUnitById(wallCell?.occupiedBy!)
+  const damage = unitType?.damage || 1 // Use unit's damage, fallback to 1
   targetEnemy.health -= damage
+  
+  // Add pain effect for visual feedback
+  addPainEffect(targetEnemy)
   
   // Add hit animation
   hitAnimations.push({
@@ -363,6 +380,7 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   
   // Check if enemy should be removed (health <= 0)
   if (targetEnemy.health <= 0) {
+    spawnCoin(targetEnemy) // Spawn coin before removing enemy
     removeEnemy(targetEnemy)
     addLogMessage(`${targetEnemy.type.name} is defeated!`)
   }
@@ -454,6 +472,40 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
     projectile.x += projectile.directionX * projectile.speed * (deltaTime / 1000)
     projectile.y += projectile.directionY * projectile.speed * (deltaTime / 1000)
     
+    // Check for collision with enemies
+    const hitEnemy = checkProjectileEnemyCollision(projectile)
+    if (hitEnemy) {
+      // Deal damage based on unit type (bowman damage)
+      const damage = UNIT_TYPES.BOWMAN.damage
+      hitEnemy.health -= damage
+      
+      // Add pain effect for visual feedback
+      addPainEffect(hitEnemy)
+      
+      // Add hit animation at enemy position
+      hitAnimations.push({
+        battlefieldCol: hitEnemy.x,
+        battlefieldRow: Math.max(hitEnemy.y, 0),
+        startTime: currentTime,
+        duration: HIT_ANIMATION_DURATION_MS,
+        isActive: true
+      })
+      
+      // Add combat log
+      addLogMessage(`${hitEnemy.type.name} is hit by Arrow for ${damage} damage`)
+      
+      // Check if enemy should be removed
+      if (hitEnemy.health <= 0) {
+        spawnCoin(hitEnemy) // Spawn coin before removing enemy
+        removeEnemy(hitEnemy)
+        addLogMessage(`${hitEnemy.type.name} is defeated!`)
+      }
+      
+      // Remove projectile after hit
+      projectile.isActive = false
+      return false
+    }
+    
     // Check if projectile has left extended bounds (includes walls and beyond battlefield)
     const leftBound = LEFT_WALL_X - projectile.size
     const rightBound = RIGHT_WALL_X + RIGHT_WALL_WIDTH + projectile.size
@@ -471,13 +523,50 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
 }
 
 /**
+ * Check if projectile collides with any enemy
+ */
+const checkProjectileEnemyCollision = (projectile: Projectile): any => {
+  const enemies = getEnemiesInProcessingOrder() // Get all active enemies
+  
+  for (const enemy of enemies) {
+    // Calculate enemy bounds in canvas coordinates
+    const enemyCoords = getBattlefieldCellCoords(enemy.x, Math.max(enemy.y, 0))
+    const enemyWidth = enemy.type.width * BATTLEFIELD_CELL_SIZE
+    const enemyHeight = Math.min(enemy.type.height, enemy.y + enemy.type.height) * BATTLEFIELD_CELL_SIZE // Only visible part
+    
+    // Check collision using simple AABB (axis-aligned bounding box)
+    const projectileLeft = projectile.x - projectile.size / 2
+    const projectileRight = projectile.x + projectile.size / 2
+    const projectileTop = projectile.y - projectile.size / 2
+    const projectileBottom = projectile.y + projectile.size / 2
+    
+    const enemyLeft = enemyCoords.x
+    const enemyRight = enemyCoords.x + enemyWidth
+    const enemyTop = enemyCoords.y
+    const enemyBottom = enemyCoords.y + enemyHeight
+    
+    // AABB collision detection
+    if (projectileLeft < enemyRight && 
+        projectileRight > enemyLeft && 
+        projectileTop < enemyBottom && 
+        projectileBottom > enemyTop) {
+      return enemy // Collision detected
+    }
+  }
+  
+  return null // No collision
+}
+
+/**
  * Render all combat effects
  */
 export const renderCombatEffects = (ctx: CanvasRenderingContext2D) => {
   renderEnemies(ctx)
+  renderSlashEffects(ctx) // Render slash effects above enemies but below other effects
   renderAttackAnimations(ctx)
   renderHitAnimations(ctx)
   renderProjectiles(ctx)
+  renderCoins(ctx)
 }
 
 /**
@@ -582,30 +671,37 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
     // Try to get the arrow image
     const arrowImage = getCachedImage(getImagePath('arrow.png'))
     if (arrowImage) {
+      // Calculate scaling and size
+      const spriteScale = projectile.spriteScale || 1.0
+      const scaledSize = projectile.size * spriteScale
+      
       // Calculate rotation based on direction and sprite orientation
       let rotation = 0
       if (projectile.directionX === 1) rotation = Math.PI / 2 // Left wall: 90° clockwise
       else if (projectile.directionX === -1) rotation = -Math.PI / 2 // Right wall: 90° counter-clockwise
       else if (projectile.directionY === -1) rotation = 0 // Bottom wall: no rotation
       
-      // Rotate and draw arrow image
+      // Rotate and draw arrow image with scaling
       ctx.translate(projectile.x, projectile.y)
       ctx.rotate(rotation)
       
       drawImage(ctx, arrowImage, 
-        -projectile.size / 2, 
-        -projectile.size / 2,
-        projectile.size, 
-        projectile.size
+        -scaledSize / 2, 
+        -scaledSize / 2,
+        scaledSize, 
+        scaledSize
       )
     } else {
       // Fallback: simple rectangle if image not loaded
+      const spriteScale = projectile.spriteScale || 1.0
+      const scaledSize = projectile.size * spriteScale
+      
       ctx.fillStyle = '#8B4513' // Brown color for arrow
       ctx.fillRect(
-        projectile.x - projectile.size / 2,
-        projectile.y - projectile.size / 2,
-        projectile.size,
-        projectile.size
+        projectile.x - scaledSize / 2,
+        projectile.y - scaledSize / 2,
+        scaledSize,
+        scaledSize
       )
     }
     

@@ -101,12 +101,12 @@ export const INITIAL_SWORDSMAN_COUNT = 10
 export const INITIAL_BOWMAN_COUNT = 10
 
 // Combat system configuration
-export const TURN_COOLDOWN_MS = 2000 // 2 seconds between turns
-export const UNIT_ACTION_DELAY_MS = 500 // 0.5 seconds between unit actions
+export const TURN_COOLDOWN_MS = 500 // 0.5 seconds between turns
+export const UNIT_ACTION_DELAY_MS = 100 // 0.1 seconds between unit actions
 export const ATTACK_ANIMATION_DURATION_MS = 1000 // 1 second golden border animation
 export const HIT_ANIMATION_DURATION_MS = 1500 // 1.5 seconds red hit animation
 export const PROJECTILE_LIFESPAN_MS = 5000 // 5 seconds arrow lifespan
-export const PROJECTILE_SPEED = 200 // pixels per second
+export const PROJECTILE_SPEED = 400 // pixels per second (2x faster)
 export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
 
 // Enemy configuration

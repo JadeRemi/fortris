@@ -9,6 +9,8 @@ export interface EnemyType {
   assetWidth: number  // pixel dimensions of sprite
   assetHeight: number // pixel dimensions of sprite
   health: number
+  damage: number // Damage dealt by this enemy
+  spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
   spawnWeight: number // relative probability of spawning
 }
 

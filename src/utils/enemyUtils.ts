@@ -1,6 +1,8 @@
 import { Enemy, EnemyType, BattlefieldCell } from '../types/enemies'
 import { ENEMY_TYPES } from '../config/enemiesConfig'
 import { generateUUID } from './uuidUtils'
+import { renderPainEffect } from './painEffectUtils'
+import { addLogMessage } from './logsUtils'
 import {
   LEVEL_WIDTH,
   LEVEL_HEIGHT,
@@ -113,8 +115,8 @@ export const findSpawnPosition = (enemyType: EnemyType): { x: number; y: number 
   // Calculate spawn Y based on enemy height for gradual reveal
   // 1x1 enemies start at y=0 (immediately visible)
   // 2x2 enemies start at y=-1 (only bottom row visible initially)
-  // 3x3 enemies would start at y=-2, etc.
-  const spawnY = 1 - enemyType.height
+  // 3x3 enemies start at y=-2 (only bottom row visible initially)
+  const spawnY = 0 - (enemyType.height - 1)
   
   // Collect all valid positions
   const validPositions: number[] = []
@@ -265,11 +267,92 @@ export const processEnemyTurn = (): void => {
   const orderedEnemies = getEnemiesInProcessingOrder()
   
   for (const enemy of orderedEnemies) {
-    moveEnemyDown(enemy)
+    const moved = moveEnemyDown(enemy)
+    
+    // Check if Lich couldn't move and try to spawn Skeleton
+    if (!moved && enemy.type.id === 'lich') {
+      tryLichSkeletonSpawn(enemy)
+    }
+    
     enemy.turnsSinceSpawn += 1
   }
   
   debugEnemyState('MOVE_END')
+}
+
+/**
+ * Try to spawn a Skeleton when Lich is obstructed
+ * Lich is 1x2 (1 wide, 2 tall), so it has 6 adjacent cells
+ */
+const tryLichSkeletonSpawn = (lich: Enemy): void => {
+  // Lich spawn chance (configurable)
+  const LICH_SPAWN_CHANCE = 0.3 // 30% chance per turn when obstructed
+  
+  // Roll spawn chance first
+  if (Math.random() > LICH_SPAWN_CHANCE) {
+    return
+  }
+  
+  // Get all adjacent cells for a 1x2 Lich
+  const adjacentCells: { x: number; y: number }[] = []
+  
+  // Lich occupies: (lich.x, lich.y) and (lich.x, lich.y + 1)
+  // Adjacent cells:
+  // Left side: (x-1, y) and (x-1, y+1)
+  adjacentCells.push({ x: lich.x - 1, y: lich.y })
+  adjacentCells.push({ x: lich.x - 1, y: lich.y + 1 })
+  
+  // Right side: (x+1, y) and (x+1, y+1) 
+  adjacentCells.push({ x: lich.x + 1, y: lich.y })
+  adjacentCells.push({ x: lich.x + 1, y: lich.y + 1 })
+  
+  // Top: (x, y-1)
+  adjacentCells.push({ x: lich.x, y: lich.y - 1 })
+  
+  // Bottom: (x, y+2)
+  adjacentCells.push({ x: lich.x, y: lich.y + 2 })
+  
+  // Filter for valid empty cells
+  const emptyCells = adjacentCells.filter(cell => {
+    // Check bounds
+    if (cell.x < 0 || cell.x >= LEVEL_WIDTH) return false
+    if (cell.y < -LEVEL_NEGATIVE_ROWS || cell.y >= LEVEL_HEIGHT) return false
+    
+    // Check if cell is empty
+    const battlefieldCell = getBattlefieldCell(cell.x, cell.y)
+    return !battlefieldCell?.enemyId
+  })
+  
+  // If no empty cells, nothing to do
+  if (emptyCells.length === 0) {
+    return
+  }
+  
+  // Pick random empty cell
+  const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)]
+  
+  // Spawn Skeleton at the chosen location
+  const skeletonType = ENEMY_TYPES.SKELETON
+  if (canPlaceEnemyAt(randomCell.x, randomCell.y, skeletonType)) {
+    const newSkeleton: Enemy = {
+      id: `skeleton_lich_spawn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      uuid: generateUUID(),
+      type: skeletonType,
+      x: randomCell.x,
+      y: randomCell.y,
+      health: skeletonType.health,
+      maxHealth: skeletonType.health,
+      turnsSinceSpawn: 0
+    }
+    
+    enemies.push(newSkeleton)
+    
+    // Mark battlefield cell as occupied
+    setBattlefieldCell(randomCell.x, randomCell.y, newSkeleton.id)
+    
+    // Add combat log
+    addLogMessage(`Lich summons a Skeleton at (${randomCell.x}, ${randomCell.y})!`)
+  }
 }
 
 // Get battlefield cell coordinates for rendering (handles negative rows)
@@ -311,19 +394,28 @@ export const renderEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy): void =
     return // Nothing to render
   }
   
-  // Calculate which part of the enemy sprite to draw
+    // Calculate which part of the enemy sprite to draw
   const spriteStartRow = visibleStartY - enemy.y // Row offset from top of enemy sprite
   const spriteRows = visibleRows // Number of rows to draw from sprite
-  
 
-  
+  // Debug multi-cell enemy rendering - remove in production
+  // console.log(`Rendering ${enemy.type.name} at y=${enemy.y}, visible=${visibleStartY}-${visibleEndY}, spriteRow=${spriteStartRow}, rows=${spriteRows}`)
+
   // Get battlefield position for rendering (top-left of visible area)
   // Use battlefieldToCanvas for proper cell boundary alignment
   const coords = getBattlefieldCellCoords(enemy.x, visibleStartY)
   
-  // Calculate dimensions
-  const visibleWidth = enemy.type.width * BATTLEFIELD_CELL_SIZE
-  const visibleHeight = spriteRows * BATTLEFIELD_CELL_SIZE
+  // Calculate dimensions with sprite scaling
+  const spriteScale = enemy.type.spriteScale || 1.0
+  const baseWidth = enemy.type.width * BATTLEFIELD_CELL_SIZE
+  const baseHeight = spriteRows * BATTLEFIELD_CELL_SIZE
+  
+  const scaledWidth = baseWidth * spriteScale
+  const scaledHeight = baseHeight * spriteScale
+  
+  // Center the scaled sprite within the original area
+  const offsetX = (baseWidth - scaledWidth) / 2
+  const offsetY = (baseHeight - scaledHeight) / 2
   
   // Calculate source rectangle (what part of the sprite to draw)
   const srcY = (spriteStartRow / enemy.type.height) * enemy.type.assetHeight
@@ -331,12 +423,15 @@ export const renderEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy): void =
   
   ctx.save()
   
-  // Draw the visible portion of the enemy
+  // Draw the visible portion of the enemy with scaling
   ctx.drawImage(
     image,
     0, srcY, enemy.type.assetWidth, srcHeight, // source rectangle
-    coords.x, coords.y, visibleWidth, visibleHeight // destination rectangle
+    coords.x + offsetX, coords.y + offsetY, scaledWidth, scaledHeight // destination rectangle with centering
   )
+  
+  // Apply pain effect overlay if enemy is taking damage (use original dimensions)
+  renderPainEffect(ctx, enemy, coords.x, coords.y, baseWidth, baseHeight)
   
   ctx.restore()
 }

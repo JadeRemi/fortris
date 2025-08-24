@@ -21,6 +21,8 @@ import {
   BATTLEFIELD_CELL_BORDER,
   BATTLEFIELD_CELL_EMPTY
 } from '../config/palette'
+import { getSelectionState } from './controlsUtils'
+import { isWallCellOccupied } from './wallExtensions'
 
 // Hover state for wall cells
 interface WallCellHover {
@@ -239,34 +241,43 @@ export const renderWalls = (ctx: CanvasRenderingContext2D) => {
 }
 
 /**
- * Handle wall cell hover
+ * Handle wall cell hover - only shows effects when unit is selected and cell is unoccupied
  */
 export const handleWallHover = (x: number, y: number, _renderCallback: () => void) => {
   
   // Clear all current hover states
   wallHoverStates.forEach(state => state.isHovered = false)
   
+  // Only show hover effects when a unit is selected from ARMY
+  const selectionState = getSelectionState()
+  if (!selectionState.isUnitSelected) {
+    return
+  }
+  
   // Check left wall
   if (isInLeftWall(x, y)) {
     const cellIndex = getLeftWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      let hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === cellIndex)
-      if (!hoverState) {
-        hoverState = { 
-          wall: 'left', 
-          cellIndex, 
-          isHovered: true, 
-          pulsateStartTime: Date.now()
+      // Only show hover effect if cell is unoccupied
+      if (!isWallCellOccupied('left', cellIndex)) {
+        let hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === cellIndex)
+        if (!hoverState) {
+          hoverState = { 
+            wall: 'left', 
+            cellIndex, 
+            isHovered: true, 
+            pulsateStartTime: Date.now()
+          }
+          wallHoverStates.push(hoverState)
+          // Glint and pulsate animations now handled in main render loop
+        } else if (!hoverState.isHovered) {
+          // Only start animation if this is a new hover (wasn't hovered before)
+          hoverState.isHovered = true
+          hoverState.pulsateStartTime = Date.now()
+          // Pulsate animation handled in main render loop
+        } else {
+          hoverState.isHovered = true
         }
-        wallHoverStates.push(hoverState)
-        // Glint and pulsate animations now handled in main render loop
-      } else if (!hoverState.isHovered) {
-        // Only start animation if this is a new hover (wasn't hovered before)
-        hoverState.isHovered = true
-        hoverState.pulsateStartTime = Date.now()
-        // Pulsate animation handled in main render loop
-      } else {
-        hoverState.isHovered = true
       }
     }
   }
@@ -275,23 +286,26 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
   if (isInRightWall(x, y)) {
     const cellIndex = getRightWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      let hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === cellIndex)
-      if (!hoverState) {
-        hoverState = { 
-          wall: 'right', 
-          cellIndex, 
-          isHovered: true, 
-          pulsateStartTime: Date.now()
+      // Only show hover effect if cell is unoccupied
+      if (!isWallCellOccupied('right', cellIndex)) {
+        let hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === cellIndex)
+        if (!hoverState) {
+          hoverState = { 
+            wall: 'right', 
+            cellIndex, 
+            isHovered: true, 
+            pulsateStartTime: Date.now()
+          }
+          wallHoverStates.push(hoverState)
+          // Glint and pulsate animations now handled in main render loop
+        } else if (!hoverState.isHovered) {
+          // Only start animation if this is a new hover (wasn't hovered before)
+          hoverState.isHovered = true
+          hoverState.pulsateStartTime = Date.now()
+          // Pulsate animation handled in main render loop
+        } else {
+          hoverState.isHovered = true
         }
-        wallHoverStates.push(hoverState)
-        // Glint and pulsate animations now handled in main render loop
-      } else if (!hoverState.isHovered) {
-        // Only start animation if this is a new hover (wasn't hovered before)
-        hoverState.isHovered = true
-        hoverState.pulsateStartTime = Date.now()
-        // Pulsate animation handled in main render loop
-      } else {
-        hoverState.isHovered = true
       }
     }
   }
@@ -300,23 +314,26 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
   if (isInBottomWall(x, y)) {
     const cellIndex = getBottomWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      let hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === cellIndex)
-      if (!hoverState) {
-        hoverState = { 
-          wall: 'bottom', 
-          cellIndex, 
-          isHovered: true, 
-          pulsateStartTime: Date.now()
+      // Only show hover effect if cell is unoccupied
+      if (!isWallCellOccupied('bottom', cellIndex)) {
+        let hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === cellIndex)
+        if (!hoverState) {
+          hoverState = { 
+            wall: 'bottom', 
+            cellIndex, 
+            isHovered: true, 
+            pulsateStartTime: Date.now()
+          }
+          wallHoverStates.push(hoverState)
+          // Glint and pulsate animations now handled in main render loop
+        } else if (!hoverState.isHovered) {
+          // Only start animation if this is a new hover (wasn't hovered before)
+          hoverState.isHovered = true
+          hoverState.pulsateStartTime = Date.now()
+          // Pulsate animation handled in main render loop
+        } else {
+          hoverState.isHovered = true
         }
-        wallHoverStates.push(hoverState)
-        // Glint and pulsate animations now handled in main render loop
-      } else if (!hoverState.isHovered) {
-        // Only start animation if this is a new hover (wasn't hovered before)
-        hoverState.isHovered = true
-        hoverState.pulsateStartTime = Date.now()
-        // Pulsate animation handled in main render loop
-      } else {
-        hoverState.isHovered = true
       }
     }
   }

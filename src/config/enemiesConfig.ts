@@ -13,6 +13,8 @@ export const ENEMY_TYPES = {
     assetWidth: 64,
     assetHeight: 64,
     health: 10,
+    damage: 1,
+    spriteScale: 0.7, // Make skulls appear smaller within their 1x1 cell
     spawnWeight: 0.5
   } as EnemyType,
   
@@ -25,6 +27,7 @@ export const ENEMY_TYPES = {
     assetWidth: 128,
     assetHeight: 128,
     health: 10,
+    damage: 1,
     spawnWeight: 0.25
   } as EnemyType,
   
@@ -37,6 +40,7 @@ export const ENEMY_TYPES = {
     assetWidth: 64,
     assetHeight: 128,
     health: 10,
+    damage: 1,
     spawnWeight: 0.20
   } as EnemyType,
   
@@ -49,6 +53,7 @@ export const ENEMY_TYPES = {
     assetWidth: 128,
     assetHeight: 128,
     health: 10,
+    damage: 1,
     spawnWeight: 0.05
   } as EnemyType,
   
@@ -61,7 +66,21 @@ export const ENEMY_TYPES = {
     assetWidth: 128,
     assetHeight: 128,
     health: 10,
+    damage: 1,
     spawnWeight: 0 // Will not spawn naturally - special conditions will be added later
+  } as EnemyType,
+  
+  SERPENT: {
+    id: 'serpent',
+    name: 'Serpent',
+    width: 3,
+    height: 1,
+    assetPath: getImagePath('serpent.png'),
+    assetWidth: 192,
+    assetHeight: 64,
+    health: 10,
+    damage: 1,
+    spawnWeight: 0.15 // Natural spawning enemy - 15% spawn weight
   } as EnemyType
 }
 

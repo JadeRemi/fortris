@@ -231,13 +231,17 @@ const renderUnitInCell = (ctx: CanvasRenderingContext2D, cellX: number, cellY: n
     return
   }
   
-  // Calculate image size and position (centered with padding)
-  const imageSize = WALL_CELL_SIZE - 8 // Leave some padding
-  const imageX = cellX + (WALL_CELL_SIZE - imageSize) / 2
-  const imageY = cellY + (WALL_CELL_SIZE - imageSize) / 2
+  // Calculate image size with sprite scaling
+  const spriteScale = unitType.spriteScale || 1.0
+  const baseImageSize = WALL_CELL_SIZE - 8 // Leave some padding
+  const scaledImageSize = baseImageSize * spriteScale
   
-  // Draw the unit image
-  ctx.drawImage(unitImage, imageX, imageY, imageSize, imageSize)
+  // Center the scaled image within the cell
+  const imageX = cellX + (WALL_CELL_SIZE - scaledImageSize) / 2
+  const imageY = cellY + (WALL_CELL_SIZE - scaledImageSize) / 2
+  
+  // Draw the unit image with scaling
+  ctx.drawImage(unitImage, imageX, imageY, scaledImageSize, scaledImageSize)
   
   ctx.restore()
 }

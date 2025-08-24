@@ -9,7 +9,7 @@ import {
   INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT
 } from '../config/gameConfig'
 import { TEXT_PRIMARY, BATTLEFIELD_CELL_BORDER, BATTLEFIELD_CELL_EMPTY } from '../config/palette'
-import { UNIT_TYPES } from '../config/unitsConfig'
+import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
 import { placeUnitOnWall } from './wallExtensions'
 
 // Army unit selection state
@@ -105,17 +105,19 @@ const renderSwordsmanCell = (ctx: CanvasRenderingContext2D) => {
   ctx.lineWidth = 1
   ctx.strokeRect(SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
   
-  // Draw swordsman image (centered in cell)
-  const imageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
-  const imageX = SWORDSMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
-  const imageY = SWORDSMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
+  // Draw swordsman image (centered in cell) with sprite scaling
+  const spriteScale = UNIT_TYPES.SWORDSMAN.spriteScale || 1.0
+  const baseImageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
+  const scaledImageSize = baseImageSize * spriteScale
+  const imageX = SWORDSMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
+  const imageY = SWORDSMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
   
   // Draw image if loaded - semi-transparent when disabled
   const swordsmanImage = getCachedImage(UNIT_TYPES.SWORDSMAN.imagePath)
   if (swordsmanImage) {
     // Set opacity - semi-transparent when disabled
     ctx.globalAlpha = swordsmanState.count > 0 ? 1.0 : 0.3
-    drawImage(ctx, swordsmanImage, imageX, imageY, imageSize, imageSize)
+    drawImage(ctx, swordsmanImage, imageX, imageY, scaledImageSize, scaledImageSize)
     ctx.globalAlpha = 1.0 // Reset opacity
   }
   
@@ -145,17 +147,19 @@ const renderBowmanCell = (ctx: CanvasRenderingContext2D) => {
   ctx.lineWidth = 1
   ctx.strokeRect(BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
   
-  // Draw bowman image (centered in cell)
-  const imageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
-  const imageX = BOWMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
-  const imageY = BOWMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
+  // Draw bowman image (centered in cell) with sprite scaling  
+  const spriteScale = UNIT_TYPES.BOWMAN.spriteScale || 1.0
+  const baseImageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
+  const scaledImageSize = baseImageSize * spriteScale
+  const imageX = BOWMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
+  const imageY = BOWMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
   
   // Draw image if loaded - semi-transparent when disabled
   const bowmanImage = getCachedImage(UNIT_TYPES.BOWMAN.imagePath)
   if (bowmanImage) {
     // Set opacity - semi-transparent when disabled
     ctx.globalAlpha = bowmanState.count > 0 ? 1.0 : 0.3
-    drawImage(ctx, bowmanImage, imageX, imageY, imageSize, imageSize)
+    drawImage(ctx, bowmanImage, imageX, imageY, scaledImageSize, scaledImageSize)
     ctx.globalAlpha = 1.0 // Reset opacity
   }
   
@@ -334,16 +338,21 @@ const drawRoundedSquareSegment = (ctx: CanvasRenderingContext2D, x: number, y: n
  * Render cursor sprite when unit is selected
  */
 export const renderCursorSprite = (ctx: CanvasRenderingContext2D, mouseX: number, mouseY: number) => {
-  if (globalSelection.isUnitSelected && globalSelection.cursorSprite) {
+  if (globalSelection.isUnitSelected && globalSelection.cursorSprite && globalSelection.selectedUnitType) {
     ctx.save()
     
-    // Make sprite smaller and semi-transparent
-    const spriteSize = 32 // Smaller than cell size
-    const spriteX = mouseX - spriteSize / 2
-    const spriteY = mouseY - spriteSize / 2
+    // Get unit type for sprite scaling
+    const unitType = getUnitById(globalSelection.selectedUnitType)
+    const spriteScale = unitType?.spriteScale || 1.0
+    
+    // Make sprite smaller and semi-transparent with scaling
+    const baseSpriteSize = 32 // Smaller than cell size
+    const scaledSpriteSize = baseSpriteSize * spriteScale
+    const spriteX = mouseX - scaledSpriteSize / 2
+    const spriteY = mouseY - scaledSpriteSize / 2
     
     ctx.globalAlpha = 0.7 // Semi-transparent
-    drawImage(ctx, globalSelection.cursorSprite, spriteX, spriteY, spriteSize, spriteSize)
+    drawImage(ctx, globalSelection.cursorSprite, spriteX, spriteY, scaledSpriteSize, scaledSpriteSize)
     
     ctx.restore()
   }

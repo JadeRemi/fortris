@@ -163,7 +163,10 @@ const GameCanvas: React.FC = () => {
         getImagePath('slime.png'), // Preload slime enemy
         getImagePath('lich.png'),  // Preload lich enemy
         getImagePath('ogre.png'),  // Preload ogre enemy
-        getImagePath('skeleton.png') // Preload skeleton enemy (no natural spawning)
+        getImagePath('skeleton.png'), // Preload skeleton enemy (no natural spawning)
+        getImagePath('serpent.png'), // Preload serpent enemy
+        getImagePath('coin.png'), // Preload coin for rewards
+        getImagePath('slash.png') // Preload slash effect for melee attacks
       ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {

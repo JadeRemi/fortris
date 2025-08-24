@@ -10,6 +10,8 @@ export interface UnitType {
   assetWidth: number  // Asset width in pixels
   assetHeight: number // Asset height in pixels
   maxHealth: number  // Maximum health points
+  damage: number     // Damage dealt by this unit
+  spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
   description?: string
 }
 
@@ -24,6 +26,7 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     assetWidth: 128,
     assetHeight: 128,
     maxHealth: 10,
+    damage: 6,
     description: 'Small melee unit - takes 1x1 cell'
   },
   BOWMAN: {
@@ -35,6 +38,7 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     assetWidth: 128,
     assetHeight: 128,
     maxHealth: 10,
+    damage: 3,
     description: 'Small ranged unit - takes 1x1 cell'
   }
 } as const
