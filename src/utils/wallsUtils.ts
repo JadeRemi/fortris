@@ -27,7 +27,6 @@ interface WallCellHover {
   wall: 'left' | 'right' | 'bottom'
   cellIndex: number
   isHovered: boolean
-  glintProgress: number // 0 to 1 for animation
   pulsateStartTime: number // When pulsating started
 }
 
@@ -102,10 +101,7 @@ export const renderLeftWall = (ctx: CanvasRenderingContext2D) => {
       ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
     }
     
-    // Draw glint animation if active
-    if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
-      drawGlintAnimation(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, hoverState.glintProgress)
-    }
+    // Glint animation removed - only pulsating border remains
   }
 }
 
@@ -165,10 +161,7 @@ export const renderRightWall = (ctx: CanvasRenderingContext2D) => {
       ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
     }
     
-    // Draw glint animation if active
-    if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
-      drawGlintAnimation(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, hoverState.glintProgress)
-    }
+    // Glint animation removed - only pulsating border remains
   }
 }
 
@@ -230,61 +223,11 @@ export const renderBottomWall = (ctx: CanvasRenderingContext2D) => {
       ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
     }
     
-    // Draw glint animation if active
-    if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
-      drawGlintAnimation(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, hoverState.glintProgress)
-    }
+    // Glint animation removed - only pulsating border remains
   }
 }
 
-/**
- * Draw diagonal glint animation across a cell
- */
-const drawGlintAnimation = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number) => {
-  ctx.save()
-  
-  // Clip to cell bounds (slightly inset to avoid border overlap)
-  ctx.beginPath()
-  ctx.rect(x + 2, y + 2, width - 4, height - 4)
-  ctx.clip()
-  
-  // Calculate diagonal glint position
-  const glintWidth = 8 // Fixed glint width for more visibility
-  
-  // Calculate the diagonal line across the cell
-  const centerX = x + width / 2
-  const centerY = y + height / 2
-  
-  // Create a more visible gradient
-  const gradient = ctx.createLinearGradient(
-    centerX - glintWidth, centerY - glintWidth,
-    centerX + glintWidth, centerY + glintWidth
-  )
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)')
-  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.6)')
-  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 1.0)')
-  gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.6)')
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-  
-  // Calculate diagonal position based on progress
-  const startX = x - glintWidth
-  const startY = y - glintWidth
-  const endX = x + width + glintWidth
-  const endY = y + height + glintWidth
-  
-  const currentX = startX + (endX - startX) * progress
-  const currentY = startY + (endY - startY) * progress
-  
-  // Draw the glint as a diagonal rectangle
-  ctx.fillStyle = gradient
-  ctx.save()
-  ctx.translate(currentX, currentY)
-  ctx.rotate(Math.PI / 4) // 45 degree diagonal
-  ctx.fillRect(-glintWidth / 2, -height, glintWidth, height * 2)
-  ctx.restore()
-  
-  ctx.restore()
-}
+// Glint animation function removed - was causing performance issues
 
 /**
  * Render all walls
@@ -298,8 +241,7 @@ export const renderWalls = (ctx: CanvasRenderingContext2D) => {
 /**
  * Handle wall cell hover
  */
-export const handleWallHover = (x: number, y: number, renderCallback: () => void) => {
-  let foundHover = false
+export const handleWallHover = (x: number, y: number, _renderCallback: () => void) => {
   
   // Clear all current hover states
   wallHoverStates.forEach(state => state.isHovered = false)
@@ -308,28 +250,21 @@ export const handleWallHover = (x: number, y: number, renderCallback: () => void
   if (isInLeftWall(x, y)) {
     const cellIndex = getLeftWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      foundHover = true
       let hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === cellIndex)
       if (!hoverState) {
         hoverState = { 
           wall: 'left', 
           cellIndex, 
           isHovered: true, 
-          glintProgress: 0,
           pulsateStartTime: Date.now()
         }
         wallHoverStates.push(hoverState)
-        startGlintAnimation(hoverState, renderCallback)
-        startPulsateAnimation(renderCallback)
+        // Glint and pulsate animations now handled in main render loop
       } else if (!hoverState.isHovered) {
         // Only start animation if this is a new hover (wasn't hovered before)
         hoverState.isHovered = true
         hoverState.pulsateStartTime = Date.now()
-        if (hoverState.glintProgress >= 1) {
-          // Reset and restart animation if previous animation was complete
-          startGlintAnimation(hoverState, renderCallback)
-        }
-        startPulsateAnimation(renderCallback)
+        // Pulsate animation handled in main render loop
       } else {
         hoverState.isHovered = true
       }
@@ -340,28 +275,21 @@ export const handleWallHover = (x: number, y: number, renderCallback: () => void
   if (isInRightWall(x, y)) {
     const cellIndex = getRightWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      foundHover = true
       let hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === cellIndex)
       if (!hoverState) {
         hoverState = { 
           wall: 'right', 
           cellIndex, 
           isHovered: true, 
-          glintProgress: 0,
           pulsateStartTime: Date.now()
         }
         wallHoverStates.push(hoverState)
-        startGlintAnimation(hoverState, renderCallback)
-        startPulsateAnimation(renderCallback)
+        // Glint and pulsate animations now handled in main render loop
       } else if (!hoverState.isHovered) {
         // Only start animation if this is a new hover (wasn't hovered before)
         hoverState.isHovered = true
         hoverState.pulsateStartTime = Date.now()
-        if (hoverState.glintProgress >= 1) {
-          // Reset and restart animation if previous animation was complete
-          startGlintAnimation(hoverState, renderCallback)
-        }
-        startPulsateAnimation(renderCallback)
+        // Pulsate animation handled in main render loop
       } else {
         hoverState.isHovered = true
       }
@@ -372,91 +300,32 @@ export const handleWallHover = (x: number, y: number, renderCallback: () => void
   if (isInBottomWall(x, y)) {
     const cellIndex = getBottomWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      foundHover = true
       let hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === cellIndex)
       if (!hoverState) {
         hoverState = { 
           wall: 'bottom', 
           cellIndex, 
           isHovered: true, 
-          glintProgress: 0,
           pulsateStartTime: Date.now()
         }
         wallHoverStates.push(hoverState)
-        startGlintAnimation(hoverState, renderCallback)
-        startPulsateAnimation(renderCallback)
+        // Glint and pulsate animations now handled in main render loop
       } else if (!hoverState.isHovered) {
         // Only start animation if this is a new hover (wasn't hovered before)
         hoverState.isHovered = true
         hoverState.pulsateStartTime = Date.now()
-        if (hoverState.glintProgress >= 1) {
-          // Reset and restart animation if previous animation was complete
-          startGlintAnimation(hoverState, renderCallback)
-        }
-        startPulsateAnimation(renderCallback)
+        // Pulsate animation handled in main render loop
       } else {
         hoverState.isHovered = true
       }
     }
   }
   
-  // Always request re-render if we found any hover
-  if (foundHover) {
-    renderCallback()
-  }
+  // Hover state updated - main render loop will handle animation updates
 }
 
-let pulsateAnimationId: number | null = null
-
-/**
- * Start glint animation for a cell (runs once)
- */
-const startGlintAnimation = (hoverState: WallCellHover, renderCallback: () => void) => {
-  // Reset and start the glint animation
-  hoverState.glintProgress = 0
-  
-  const animate = () => {
-    hoverState.glintProgress += 0.04 // Slightly faster animation
-    
-    if (hoverState.glintProgress >= 1) {
-      hoverState.glintProgress = 1
-      // Animation complete - render one final time
-      renderCallback()
-      return
-    }
-    
-    // Continue animation
-    renderCallback()
-    requestAnimationFrame(animate)
-  }
-  
-  animate()
-}
-
-/**
- * Start pulsate animation that continues while cells are hovered
- */
-const startPulsateAnimation = (renderCallback: () => void) => {
-  // Only start if not already running
-  if (pulsateAnimationId !== null) return
-  
-  const animate = () => {
-    // Check if any cells are still being hovered
-    const hasHoveredCells = wallHoverStates.some(state => state.isHovered)
-    
-    if (!hasHoveredCells) {
-      // No more hovered cells, stop animation
-      pulsateAnimationId = null
-      return
-    }
-    
-    // Continue pulsating animation
-    renderCallback()
-    pulsateAnimationId = requestAnimationFrame(animate)
-  }
-  
-  animate()
-}
+// Animation functions removed - all animations now handled by main render loop
+// Glint and pulsate effects are calculated during normal rendering cycle
 
 /**
  * Check if coordinates are within left wall

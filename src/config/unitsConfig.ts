@@ -6,6 +6,8 @@ export interface UnitType {
   width: number  // Width in cells
   height: number // Height in cells
   imagePath: string
+  assetWidth: number  // Asset width in pixels
+  assetHeight: number // Asset height in pixels
   description?: string
 }
 
@@ -16,7 +18,39 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     width: 1,
     height: 1,
     imagePath: '/src/assets/images/swordsman.png',
+    assetWidth: 128,
+    assetHeight: 128,
     description: 'Small melee unit - takes 1x1 cell'
+  },
+  BOWMAN: {
+    id: 'bowman',
+    name: 'Bowman',
+    width: 1,
+    height: 1,
+    imagePath: '/src/assets/images/bowman.png',
+    assetWidth: 128,
+    assetHeight: 128,
+    description: 'Small ranged unit - takes 1x1 cell'
+  },
+  SLIME: {
+    id: 'slime',
+    name: 'Slime',
+    width: 2,
+    height: 2,
+    imagePath: '/src/assets/images/slime.png',
+    assetWidth: 128,
+    assetHeight: 128,
+    description: 'Medium enemy unit - takes 2x2 cells'
+  },
+  SKULL: {
+    id: 'skull',
+    name: 'Skull',
+    width: 1,
+    height: 1,
+    imagePath: '/src/assets/images/skull.png',
+    assetWidth: 64,
+    assetHeight: 64,
+    description: 'Small enemy unit - takes 1x1 cell'
   }
 } as const
 

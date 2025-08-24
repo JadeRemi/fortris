@@ -73,8 +73,15 @@ export const CONTROLS_Y = BATTLEFIELD_Y
 
 // Army unit cell settings
 export const ARMY_UNIT_CELL_SIZE = BATTLEFIELD_CELL_SIZE // Same size as battlefield cells
-export const ARMY_UNIT_CELL_X = ARMY_X + 30 // Positioned within army section
-export const ARMY_UNIT_CELL_Y = ARMY_Y + 80 // Below the army title
+export const ARMY_UNIT_CELL_SPACING = 20 // Space between unit cells
+
+// Swordsman cell positioning
+export const SWORDSMAN_CELL_X = ARMY_X + 30 // Positioned within army section
+export const SWORDSMAN_CELL_Y = ARMY_Y + 80 // Below the army title
+
+// Bowman cell positioning (below swordsman)
+export const BOWMAN_CELL_X = ARMY_X + 30 // Same X as swordsman
+export const BOWMAN_CELL_Y = SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE + ARMY_UNIT_CELL_SPACING
 
 // Font settings
 export const GAME_FONT_FAMILY = 'Pixelify Sans'
@@ -83,3 +90,7 @@ export const GAME_FONT_SIZE = 24
 // Noise background settings
 export const NOISE_DENSITY = 0.15 // 15% noise coverage
 export const NOISE_PIXEL_SIZE = 4
+
+// Unit configuration
+export const INITIAL_SWORDSMAN_COUNT = 10
+export const INITIAL_BOWMAN_COUNT = 10

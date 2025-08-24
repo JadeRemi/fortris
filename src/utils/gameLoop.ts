@@ -1,12 +1,14 @@
-import { TICK_RATE } from '../config/gameConfig'
+import { TICK_RATE, TARGET_FPS } from '../config/gameConfig'
 
 /**
- * Game loop management
+ * Game loop management with FPS capping
  */
 export class GameLoop {
   private animationId: number | null = null
   private lastTime = 0
+  private lastRenderTime = 0
   private accumulator = 0
+  private readonly frameTime = 1000 / TARGET_FPS // Time between frames in ms
   
   constructor(
     private updateCallback: (deltaTime: number) => void,
@@ -21,7 +23,9 @@ export class GameLoop {
       return // Already running
     }
     
-    this.lastTime = performance.now()
+    const now = performance.now()
+    this.lastTime = now
+    this.lastRenderTime = now
     this.tick()
   }
 
@@ -36,7 +40,7 @@ export class GameLoop {
   }
 
   /**
-   * Main game loop tick
+   * Main game loop tick with FPS capping
    */
   private tick = (currentTime: number = performance.now()) => {
     const deltaTime = currentTime - this.lastTime
@@ -50,8 +54,12 @@ export class GameLoop {
       this.accumulator -= TICK_RATE
     }
     
-    // Render
-    this.renderCallback()
+    // FPS capped rendering - only render if enough time has passed
+    const timeSinceLastRender = currentTime - this.lastRenderTime
+    if (timeSinceLastRender >= this.frameTime) {
+      this.renderCallback()
+      this.lastRenderTime = currentTime
+    }
     
     this.animationId = requestAnimationFrame(this.tick)
   }

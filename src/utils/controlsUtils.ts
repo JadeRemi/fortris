@@ -3,23 +3,46 @@ import { drawImage, getCachedImage } from './imageUtils'
 import { 
   CONTROLS_X, CONTROLS_Y, CONTROLS_WIDTH, 
   ARMY_X, ARMY_Y, ARMY_WIDTH,
-  ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE
+  ARMY_UNIT_CELL_SIZE,
+  SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y,
+  BOWMAN_CELL_X, BOWMAN_CELL_Y,
+  INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT
 } from '../config/gameConfig'
 import { TEXT_PRIMARY, BATTLEFIELD_CELL_BORDER, BATTLEFIELD_CELL_EMPTY } from '../config/palette'
 import { UNIT_TYPES } from '../config/unitsConfig'
+import { placeUnitOnWall } from './wallExtensions'
 
 // Army unit selection state
 interface ArmyUnitState {
   isSelected: boolean
   selectionStartTime: number
+  count: number
+}
+
+// Global selection state for unit placement
+interface GlobalSelectionState {
+  isUnitSelected: boolean
+  selectedUnitType: string | null
+  cursorSprite: HTMLImageElement | null
 }
 
 let swordsmanState: ArmyUnitState = {
   isSelected: false,
-  selectionStartTime: 0
+  selectionStartTime: 0,
+  count: INITIAL_SWORDSMAN_COUNT
 }
 
-let selectionAnimationId: number | null = null
+let bowmanState: ArmyUnitState = {
+  isSelected: false,
+  selectionStartTime: 0,
+  count: INITIAL_BOWMAN_COUNT
+}
+
+let globalSelection: GlobalSelectionState = {
+  isUnitSelected: false,
+  selectedUnitType: null,
+  cursorSprite: null
+}
 
 /**
  * Render the controls section
@@ -62,8 +85,9 @@ export const renderArmy = (ctx: CanvasRenderingContext2D) => {
   ctx.lineTo(ARMY_X + ARMY_WIDTH - 20, ARMY_Y + 50)
   ctx.stroke()
   
-  // Render swordsman unit cell
+  // Render unit cells
   renderSwordsmanCell(ctx)
+  renderBowmanCell(ctx)
 }
 
 /**
@@ -74,31 +98,74 @@ const renderSwordsmanCell = (ctx: CanvasRenderingContext2D) => {
   
   // Draw cell background (same as battlefield cells)
   ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
-  ctx.fillRect(ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+  ctx.fillRect(SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
   
-  // Draw cell border
-  ctx.strokeStyle = BATTLEFIELD_CELL_BORDER
+  // Draw cell border - darker when disabled
+  ctx.strokeStyle = swordsmanState.count > 0 ? BATTLEFIELD_CELL_BORDER : '#333333'
   ctx.lineWidth = 1
-  ctx.strokeRect(ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+  ctx.strokeRect(SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
   
   // Draw swordsman image (centered in cell)
   const imageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
-  const imageX = ARMY_UNIT_CELL_X + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
-  const imageY = ARMY_UNIT_CELL_Y + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
+  const imageX = SWORDSMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
+  const imageY = SWORDSMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
   
-  // Draw image if loaded
+  // Draw image if loaded - semi-transparent when disabled
   const swordsmanImage = getCachedImage(UNIT_TYPES.SWORDSMAN.imagePath)
   if (swordsmanImage) {
+    // Set opacity - semi-transparent when disabled
+    ctx.globalAlpha = swordsmanState.count > 0 ? 1.0 : 0.3
     drawImage(ctx, swordsmanImage, imageX, imageY, imageSize, imageSize)
+    ctx.globalAlpha = 1.0 // Reset opacity
   }
   
   // Draw selection animation if selected
   if (swordsmanState.isSelected) {
-    drawSelectionAnimation(ctx, ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE)
+    drawSelectionAnimation(ctx, SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE)
   }
   
   // Draw numeric counter in bottom right corner (over everything else)
-  drawUnitCounter(ctx, ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE, 1)
+  drawUnitCounter(ctx, SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, swordsmanState.count)
+  
+  ctx.restore()
+}
+
+/**
+ * Render the bowman unit cell in the army section
+ */
+const renderBowmanCell = (ctx: CanvasRenderingContext2D) => {
+  ctx.save()
+  
+  // Draw cell background (same as battlefield cells)
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+  
+  // Draw cell border - darker when disabled
+  ctx.strokeStyle = bowmanState.count > 0 ? BATTLEFIELD_CELL_BORDER : '#333333'
+  ctx.lineWidth = 1
+  ctx.strokeRect(BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+  
+  // Draw bowman image (centered in cell)
+  const imageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
+  const imageX = BOWMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
+  const imageY = BOWMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - imageSize) / 2
+  
+  // Draw image if loaded - semi-transparent when disabled
+  const bowmanImage = getCachedImage(UNIT_TYPES.BOWMAN.imagePath)
+  if (bowmanImage) {
+    // Set opacity - semi-transparent when disabled
+    ctx.globalAlpha = bowmanState.count > 0 ? 1.0 : 0.3
+    drawImage(ctx, bowmanImage, imageX, imageY, imageSize, imageSize)
+    ctx.globalAlpha = 1.0 // Reset opacity
+  }
+  
+  // Draw selection animation if selected
+  if (bowmanState.isSelected) {
+    drawSelectionAnimation(ctx, BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE)
+  }
+  
+  // Draw numeric counter in bottom right corner (over everything else)
+  drawUnitCounter(ctx, BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, bowmanState.count)
   
   ctx.restore()
 }
@@ -140,8 +207,19 @@ const drawUnitCounter = (ctx: CanvasRenderingContext2D, cellX: number, cellY: nu
  */
 const drawSelectionAnimation = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
   const currentTime = Date.now()
-  const elapsedTime = (currentTime - swordsmanState.selectionStartTime) % 2000 // 2 second cycle
-  const progress = elapsedTime / 2000 // 0 to 1
+  
+  // Determine which unit is selected and use appropriate timing
+  let selectionStartTime: number
+  if (swordsmanState.isSelected) {
+    selectionStartTime = swordsmanState.selectionStartTime
+  } else if (bowmanState.isSelected) {
+    selectionStartTime = bowmanState.selectionStartTime
+  } else {
+    return // No unit selected
+  }
+  
+  const elapsedTime = (currentTime - selectionStartTime) % 6000 // 6 second cycle (3x slower)
+  const progress = elapsedTime / 6000 // 0 to 1
   
   ctx.save()
   ctx.strokeStyle = '#4CAF50' // Same green as wall hover
@@ -162,8 +240,9 @@ const drawSelectionAnimation = (ctx: CanvasRenderingContext2D, x: number, y: num
     const segmentStart = (i * segmentLength + rotationOffset) % (squareSize * 4)
     const segmentEnd = segmentStart + (segmentLength * 0.7) // Gaps between segments
     
-    // Vary opacity based on position for gradient effect
-    const opacity = 0.3 + 0.7 * Math.sin((i / segments) * Math.PI * 2 + progress * Math.PI * 2)
+    // Synchronized gradient rotation - rotates with the same speed as border scroll
+    const gradientRotation = progress * Math.PI * 2 // Same rotation speed as border scroll
+    const opacity = 0.3 + 0.7 * Math.sin((i / segments) * Math.PI * 2 + gradientRotation)
     ctx.globalAlpha = Math.max(0.2, opacity)
     
     // Draw rounded segment on the square perimeter
@@ -252,6 +331,92 @@ const drawRoundedSquareSegment = (ctx: CanvasRenderingContext2D, x: number, y: n
 }
 
 /**
+ * Render cursor sprite when unit is selected
+ */
+export const renderCursorSprite = (ctx: CanvasRenderingContext2D, mouseX: number, mouseY: number) => {
+  if (globalSelection.isUnitSelected && globalSelection.cursorSprite) {
+    ctx.save()
+    
+    // Make sprite smaller and semi-transparent
+    const spriteSize = 32 // Smaller than cell size
+    const spriteX = mouseX - spriteSize / 2
+    const spriteY = mouseY - spriteSize / 2
+    
+    ctx.globalAlpha = 0.7 // Semi-transparent
+    drawImage(ctx, globalSelection.cursorSprite, spriteX, spriteY, spriteSize, spriteSize)
+    
+    ctx.restore()
+  }
+}
+
+/**
+ * Handle global click for deselection or unit placement
+ */
+export const handleGlobalClick = (_x: number, _y: number, renderCallback: () => void): boolean => {
+  // If no unit is selected, nothing to do
+  if (!globalSelection.isUnitSelected) {
+    return false
+  }
+  
+  // Always deselect the unit after any click
+  swordsmanState.isSelected = false
+  bowmanState.isSelected = false // Fix: Also deselect bowman
+  globalSelection.isUnitSelected = false
+  globalSelection.selectedUnitType = null
+  globalSelection.cursorSprite = null
+  stopSelectionAnimation()
+  
+  renderCallback()
+  return true
+}
+
+/**
+ * Attempt to place unit on wall cell
+ */
+export const tryPlaceUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): boolean => {
+  // Check if unit is selected
+  if (!globalSelection.isUnitSelected || !globalSelection.selectedUnitType) {
+    return false
+  }
+  
+  // Check which unit type is selected and verify count
+  let unitState: ArmyUnitState
+  if (globalSelection.selectedUnitType === UNIT_TYPES.SWORDSMAN.id) {
+    unitState = swordsmanState
+  } else if (globalSelection.selectedUnitType === UNIT_TYPES.BOWMAN.id) {
+    unitState = bowmanState
+  } else {
+    return false // Unknown unit type
+  }
+  
+  // Check if unit has available count
+  if (unitState.count <= 0) {
+    return false
+  }
+  
+  // Try to place the unit
+  const success = placeUnitOnWall(wallType, cellIndex, globalSelection.selectedUnitType)
+  if (!success) {
+    return false // Cell already occupied or invalid
+  }
+  
+  // Decrease counter
+  unitState.count -= 1
+  
+  return true
+}
+
+/**
+ * Get current selection state for external components
+ */
+export const getSelectionState = () => ({
+  isUnitSelected: globalSelection.isUnitSelected,
+  selectedUnitType: globalSelection.selectedUnitType,
+  swordsmanCount: swordsmanState.count,
+  bowmanCount: bowmanState.count
+})
+
+/**
  * Get controls section bounds
  */
 export const getControlsBounds = () => ({
@@ -277,19 +442,36 @@ export const isInControlsSection = (x: number, y: number): boolean => {
  */
 export const handleSwordsmanClick = (x: number, y: number, renderCallback: () => void): boolean => {
   // Check if click is within swordsman cell bounds
-  if (x >= ARMY_UNIT_CELL_X && 
-      x <= ARMY_UNIT_CELL_X + ARMY_UNIT_CELL_SIZE && 
-      y >= ARMY_UNIT_CELL_Y && 
-      y <= ARMY_UNIT_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+  if (x >= SWORDSMAN_CELL_X && 
+      x <= SWORDSMAN_CELL_X + ARMY_UNIT_CELL_SIZE && 
+      y >= SWORDSMAN_CELL_Y && 
+      y <= SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    
+    // Can't select if unit is disabled (count <= 0)
+    if (swordsmanState.count <= 0) {
+      return true // Consumed the click but didn't change state
+    }
+    
+    // Mutual exclusion: deselect bowman if selected
+    if (bowmanState.isSelected) {
+      bowmanState.isSelected = false
+      stopSelectionAnimation()
+    }
     
     // Toggle selection state
     swordsmanState.isSelected = !swordsmanState.isSelected
     swordsmanState.selectionStartTime = Date.now()
     
-    // Start or stop selection animation
+    // Update global selection state
     if (swordsmanState.isSelected) {
+      globalSelection.isUnitSelected = true
+      globalSelection.selectedUnitType = UNIT_TYPES.SWORDSMAN.id
+      globalSelection.cursorSprite = getCachedImage(UNIT_TYPES.SWORDSMAN.imagePath) || null
       startSelectionAnimation(renderCallback)
     } else {
+      globalSelection.isUnitSelected = false
+      globalSelection.selectedUnitType = null
+      globalSelection.cursorSprite = null
       stopSelectionAnimation()
     }
     
@@ -301,43 +483,89 @@ export const handleSwordsmanClick = (x: number, y: number, renderCallback: () =>
 }
 
 /**
- * Start continuous selection animation
+ * Handle click on bowman unit cell
  */
-const startSelectionAnimation = (renderCallback: () => void) => {
-  // Only start if not already running
-  if (selectionAnimationId !== null) return
-  
-  const animate = () => {
-    if (!swordsmanState.isSelected) {
-      // Stop animation if no longer selected
-      selectionAnimationId = null
-      return
+export const handleBowmanClick = (x: number, y: number, renderCallback: () => void): boolean => {
+  // Check if click is within bowman cell bounds
+  if (x >= BOWMAN_CELL_X && 
+      x <= BOWMAN_CELL_X + ARMY_UNIT_CELL_SIZE && 
+      y >= BOWMAN_CELL_Y && 
+      y <= BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    
+    // Can't select if unit is disabled (count <= 0)
+    if (bowmanState.count <= 0) {
+      return true // Consumed the click but didn't change state
     }
     
-    // Continue animation
+    // Mutual exclusion: deselect swordsman if selected
+    if (swordsmanState.isSelected) {
+      swordsmanState.isSelected = false
+      stopSelectionAnimation()
+    }
+    
+    // Toggle selection state
+    bowmanState.isSelected = !bowmanState.isSelected
+    bowmanState.selectionStartTime = Date.now()
+    
+    // Update global selection state
+    if (bowmanState.isSelected) {
+      globalSelection.isUnitSelected = true
+      globalSelection.selectedUnitType = UNIT_TYPES.BOWMAN.id
+      globalSelection.cursorSprite = getCachedImage(UNIT_TYPES.BOWMAN.imagePath) || null
+      startSelectionAnimation(renderCallback)
+    } else {
+      globalSelection.isUnitSelected = false
+      globalSelection.selectedUnitType = null
+      globalSelection.cursorSprite = null
+      stopSelectionAnimation()
+    }
+    
     renderCallback()
-    selectionAnimationId = requestAnimationFrame(animate)
+    return true
   }
   
-  animate()
+  return false
 }
 
 /**
- * Stop selection animation
+ * Start continuous selection animation (no longer creates separate animation loop)
+ */
+const startSelectionAnimation = (_renderCallback: () => void) => {
+  // Animation is now handled by the main game loop - no separate requestAnimationFrame needed
+  // Selection animation will be drawn during normal render cycle when isSelected is true
+}
+
+/**
+ * Stop selection animation (no longer manages separate animation loop)
  */
 const stopSelectionAnimation = () => {
-  if (selectionAnimationId !== null) {
-    cancelAnimationFrame(selectionAnimationId)
-    selectionAnimationId = null
-  }
+  // Animation stopping is now handled by setting isSelected = false
+  // No need to cancel separate requestAnimationFrame since we use the main game loop
 }
 
 /**
  * Check if a point is within the swordsman cell
  */
 export const isPointInSwordsmanCell = (x: number, y: number): boolean => {
-  return x >= ARMY_UNIT_CELL_X && 
-         x <= ARMY_UNIT_CELL_X + ARMY_UNIT_CELL_SIZE && 
-         y >= ARMY_UNIT_CELL_Y && 
-         y <= ARMY_UNIT_CELL_Y + ARMY_UNIT_CELL_SIZE
+  return x >= SWORDSMAN_CELL_X && 
+         x <= SWORDSMAN_CELL_X + ARMY_UNIT_CELL_SIZE && 
+         y >= SWORDSMAN_CELL_Y && 
+         y <= SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE
+}
+
+/**
+ * Check if a point is within the bowman cell
+ */
+export const isPointInBowmanCell = (x: number, y: number): boolean => {
+  return x >= BOWMAN_CELL_X && 
+         x <= BOWMAN_CELL_X + ARMY_UNIT_CELL_SIZE && 
+         y >= BOWMAN_CELL_Y && 
+         y <= BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE
+}
+
+/**
+ * Check if a point is within any army unit cell
+ */
+export const isPointInAnyUnitCell = (x: number, y: number): boolean => {
+  return isPointInSwordsmanCell(x, y) || isPointInBowmanCell(x, y)
 }

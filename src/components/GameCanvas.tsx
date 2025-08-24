@@ -4,10 +4,12 @@ import { createGameLoop } from '../utils/gameLoop'
 import { renderNoiseBackground } from '../utils/noiseUtils'
 import { renderBattlefield } from '../utils/battlefieldUtils'
 import { renderWalls, handleWallHover, isInWall } from '../utils/wallsUtils'
-import { renderControls, renderArmy, handleSwordsmanClick, isPointInSwordsmanCell } from '../utils/controlsUtils'
+import { renderControls, renderArmy, handleSwordsmanClick, handleBowmanClick, isPointInAnyUnitCell, renderCursorSprite, handleGlobalClick, tryPlaceUnitOnWall, getSelectionState } from '../utils/controlsUtils'
+import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex } from '../utils/wallExtensions'
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
+import { updateFPS, renderFPS } from '../utils/fpsUtils'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig'
 import { TEXT_PRIMARY } from '../config/palette'
 
@@ -16,6 +18,7 @@ const GameCanvas: React.FC = () => {
   const gameLoopRef = useRef<ReturnType<typeof createGameLoop> | null>(null)
   const [scale, setScale] = useState(1)
   const [fontLoaded, setFontLoaded] = useState(false)
+  const [_mousePos, setMousePos] = useState({ x: 0, y: 0 }) // Throttled mouse position (not directly used)
 
   // Create stats button (positioned in controls section)
   const statsButton = useRef<CanvasButton>(
@@ -47,6 +50,9 @@ const GameCanvas: React.FC = () => {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Update FPS tracking
+    updateFPS()
+
     // Render deterministic Voronoi noise background
     renderNoiseBackground(ctx)
 
@@ -55,6 +61,9 @@ const GameCanvas: React.FC = () => {
 
     // Render walls
     renderWalls(ctx)
+
+    // Render placed units in walls
+    renderPlacedUnits(ctx)
 
     // Render army section
     renderArmy(ctx)
@@ -69,7 +78,13 @@ const GameCanvas: React.FC = () => {
     if (fontLoaded) {
       renderText(ctx, 'Fortris', CANVAS_WIDTH / 2, 100, TEXT_PRIMARY, 48)
     }
-  }, [fontLoaded])
+
+    // Render cursor sprite if unit is selected (using immediate mouse position)
+    renderCursorSprite(ctx, mousePositionRef.current.x, mousePositionRef.current.y)
+
+    // Render FPS display
+    renderFPS(ctx)
+  }, [fontLoaded]) // Removed mousePos dependency - now using ref
 
   // Initialize canvas and game loop
   useEffect(() => {
@@ -83,7 +98,10 @@ const GameCanvas: React.FC = () => {
     // Load font and preload images
     Promise.all([
       loadGameFont(),
-      preloadImages(['/src/assets/images/swordsman.png'])
+      preloadImages([
+        '/src/assets/images/swordsman.png',
+        '/src/assets/images/bowman.png'
+      ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {
         console.error('Failed to load font or images:', error)
@@ -127,6 +145,10 @@ const GameCanvas: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Mouse position throttling to prevent React render spam
+  const mousePositionRef = useRef({ x: 0, y: 0 })
+  const lastMouseUpdateRef = useRef(0)
+
   // Mouse interaction handlers
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -140,6 +162,16 @@ const GameCanvas: React.FC = () => {
       scale
     )
 
+    // Store mouse position in ref for immediate use (no re-render)
+    mousePositionRef.current = canvasCoords
+    
+    // Throttle React state updates to match target FPS (60 FPS = ~16.67ms)
+    const now = performance.now()
+    if (now - lastMouseUpdateRef.current >= 16.67) {
+      setMousePos(canvasCoords)
+      lastMouseUpdateRef.current = now
+    }
+
     // Update button hover state
     const wasHovered = statsButton.current.isHovered
     statsButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, statsButton.current)
@@ -147,13 +179,18 @@ const GameCanvas: React.FC = () => {
     // Handle wall hover effects
     handleWallHover(canvasCoords.x, canvasCoords.y, renderGame)
     
-    // Check if hovering over wall cells, button, or swordsman cell
+    // Check if hovering over wall cells, button, or any unit cell
     const overButton = statsButton.current.isHovered
     const overWall = isInWall(canvasCoords.x, canvasCoords.y)
-    const overSwordsman = isPointInSwordsmanCell(canvasCoords.x, canvasCoords.y)
+    const overUnit = isPointInAnyUnitCell(canvasCoords.x, canvasCoords.y)
+    const selectionState = getSelectionState()
     
-    // Change cursor based on what's being hovered
-    canvas.style.cursor = (overButton || overWall || overSwordsman) ? 'pointer' : 'default'
+    // Set appropriate cursor
+    if (selectionState.isUnitSelected) {
+      canvas.style.cursor = 'none' // Hide cursor when showing sprite
+    } else {
+      canvas.style.cursor = (overButton || overWall || overUnit) ? 'pointer' : 'default'
+    }
     
     // Request re-render if hover state changed
     if (wasHovered !== statsButton.current.isHovered) {
@@ -180,8 +217,44 @@ const GameCanvas: React.FC = () => {
       return
     }
     
-    // Check if clicking on swordsman cell
+    // Check if clicking on unit cells
     if (handleSwordsmanClick(canvasCoords.x, canvasCoords.y, renderGame)) {
+      return
+    }
+    if (handleBowmanClick(canvasCoords.x, canvasCoords.y, renderGame)) {
+      return
+    }
+
+    // Check if unit is selected for placement
+    const selectionState = getSelectionState()
+    if (selectionState.isUnitSelected) {
+      // Try to place unit on wall cell
+      let placed = false
+
+      // Check left wall
+      const leftCellIndex = getLeftWallCellIndex(canvasCoords.x, canvasCoords.y)
+      if (leftCellIndex >= 0 && !isWallCellOccupied('left', leftCellIndex)) {
+        placed = tryPlaceUnitOnWall('left', leftCellIndex)
+      }
+
+      // Check right wall if not placed
+      if (!placed) {
+        const rightCellIndex = getRightWallCellIndex(canvasCoords.x, canvasCoords.y)
+        if (rightCellIndex >= 0 && !isWallCellOccupied('right', rightCellIndex)) {
+          placed = tryPlaceUnitOnWall('right', rightCellIndex)
+        }
+      }
+
+      // Check bottom wall if not placed
+      if (!placed) {
+        const bottomCellIndex = getBottomWallCellIndex(canvasCoords.x, canvasCoords.y)
+        if (bottomCellIndex >= 0 && !isWallCellOccupied('bottom', bottomCellIndex)) {
+          placed = tryPlaceUnitOnWall('bottom', bottomCellIndex)
+        }
+      }
+
+      // Always handle global click (deselect unit)
+      handleGlobalClick(canvasCoords.x, canvasCoords.y, renderGame)
       return
     }
   }, [scale, renderGame])

@@ -6,6 +6,7 @@ export interface WallCell {
   wallType: WallType
   index: number // Position within the wall
   isOccupied: boolean
+  occupiedBy?: string // Unit type ID (e.g., 'swordsman')
   // Add more cell properties as needed for game logic
 }
 
