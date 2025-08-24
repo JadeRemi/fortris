@@ -1,0 +1,549 @@
+import {
+  LEVEL_HEIGHT,
+  LEVEL_WIDTH,
+  WALL_CELL_SIZE,
+  WALL_BORDER_WIDTH,
+  LEFT_WALL_X,
+  LEFT_WALL_Y,
+  LEFT_WALL_WIDTH,
+  LEFT_WALL_HEIGHT,
+  RIGHT_WALL_X,
+  RIGHT_WALL_Y,
+  RIGHT_WALL_WIDTH,
+  RIGHT_WALL_HEIGHT,
+  BOTTOM_WALL_X,
+  BOTTOM_WALL_Y,
+  BOTTOM_WALL_WIDTH,
+  BOTTOM_WALL_HEIGHT
+} from '../config/gameConfig'
+import {
+  BATTLEFIELD_BORDER,
+  BATTLEFIELD_CELL_BORDER,
+  BATTLEFIELD_CELL_EMPTY
+} from '../config/palette'
+
+// Hover state for wall cells
+interface WallCellHover {
+  wall: 'left' | 'right' | 'bottom'
+  cellIndex: number
+  isHovered: boolean
+  glintProgress: number // 0 to 1 for animation
+  pulsateStartTime: number // When pulsating started
+}
+
+let wallHoverStates: WallCellHover[] = []
+
+/**
+ * Render the left wall
+ */
+export const renderLeftWall = (ctx: CanvasRenderingContext2D) => {
+  // Draw outer border
+  ctx.fillStyle = BATTLEFIELD_BORDER
+  ctx.fillRect(LEFT_WALL_X, LEFT_WALL_Y, LEFT_WALL_WIDTH, LEFT_WALL_HEIGHT)
+  
+  // Fill with battlefield background
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(LEFT_WALL_X + WALL_BORDER_WIDTH, LEFT_WALL_Y + WALL_BORDER_WIDTH, 
+               LEFT_WALL_WIDTH - WALL_BORDER_WIDTH * 2, LEFT_WALL_HEIGHT - WALL_BORDER_WIDTH * 2)
+  
+  // Draw individual cells
+  const cellSpacing = (LEFT_WALL_HEIGHT - WALL_BORDER_WIDTH * 2 - LEVEL_HEIGHT * WALL_CELL_SIZE) / (LEVEL_HEIGHT - 1)
+  for (let i = 0; i < LEVEL_HEIGHT; i++) {
+    const cellY = LEFT_WALL_Y + WALL_BORDER_WIDTH + i * (WALL_CELL_SIZE + cellSpacing)
+    const cellX = LEFT_WALL_X + WALL_BORDER_WIDTH
+    
+    // Check for hover state
+    const hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === i)
+    let borderColor = BATTLEFIELD_CELL_BORDER
+    let lineWidth = 1
+    
+    if (hoverState?.isHovered) {
+      // Calculate pulsating effect - seamless loop starting from brightest
+      const currentTime = Date.now()
+      const elapsedTime = (currentTime - hoverState.pulsateStartTime) % 2000 // 2 second cycle
+      const rawProgress = elapsedTime / 2000
+      
+      // Create seamless sine wave oscillation starting from peak (1.0)
+      const pulsateProgress = (Math.sin(rawProgress * Math.PI * 2 - Math.PI / 2) + 1) / 2
+      
+      // Interpolate between dim and bright green (40% to 100% intensity)
+      const intensity = 0.4 + (pulsateProgress * 0.6) // 40% to 100% intensity
+      const r = Math.floor(76 * intensity)  // #4CAF50 red component
+      const g = Math.floor(175 * intensity) // #4CAF50 green component  
+      const b = Math.floor(80 * intensity)  // #4CAF50 blue component
+      
+      borderColor = `rgb(${r}, ${g}, ${b})`
+      lineWidth = 3
+    }
+    
+    // Draw cell border (thicker when hovered)
+    ctx.strokeStyle = borderColor
+    ctx.lineWidth = lineWidth
+    ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    
+    // Draw glint animation if active
+    if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
+      drawGlintAnimation(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, hoverState.glintProgress)
+    }
+  }
+}
+
+/**
+ * Render the right wall
+ */
+export const renderRightWall = (ctx: CanvasRenderingContext2D) => {
+  // Draw outer border
+  ctx.fillStyle = BATTLEFIELD_BORDER
+  ctx.fillRect(RIGHT_WALL_X, RIGHT_WALL_Y, RIGHT_WALL_WIDTH, RIGHT_WALL_HEIGHT)
+  
+  // Fill with battlefield background
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(RIGHT_WALL_X + WALL_BORDER_WIDTH, RIGHT_WALL_Y + WALL_BORDER_WIDTH,
+               RIGHT_WALL_WIDTH - WALL_BORDER_WIDTH * 2, RIGHT_WALL_HEIGHT - WALL_BORDER_WIDTH * 2)
+  
+  // Draw individual cells
+  const cellSpacing = (RIGHT_WALL_HEIGHT - WALL_BORDER_WIDTH * 2 - LEVEL_HEIGHT * WALL_CELL_SIZE) / (LEVEL_HEIGHT - 1)
+  for (let i = 0; i < LEVEL_HEIGHT; i++) {
+    const cellY = RIGHT_WALL_Y + WALL_BORDER_WIDTH + i * (WALL_CELL_SIZE + cellSpacing)
+    const cellX = RIGHT_WALL_X + WALL_BORDER_WIDTH
+    
+    // Check for hover state
+    const hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === i)
+    let borderColor = BATTLEFIELD_CELL_BORDER
+    let lineWidth = 1
+    
+    if (hoverState?.isHovered) {
+      // Calculate pulsating effect - seamless loop starting from brightest
+      const currentTime = Date.now()
+      const elapsedTime = (currentTime - hoverState.pulsateStartTime) % 2000 // 2 second cycle
+      const rawProgress = elapsedTime / 2000
+      
+      // Create seamless sine wave oscillation starting from peak (1.0)
+      const pulsateProgress = (Math.sin(rawProgress * Math.PI * 2 - Math.PI / 2) + 1) / 2
+      
+      // Interpolate between dim and bright green (40% to 100% intensity)
+      const intensity = 0.4 + (pulsateProgress * 0.6) // 40% to 100% intensity
+      const r = Math.floor(76 * intensity)  // #4CAF50 red component
+      const g = Math.floor(175 * intensity) // #4CAF50 green component  
+      const b = Math.floor(80 * intensity)  // #4CAF50 blue component
+      
+      borderColor = `rgb(${r}, ${g}, ${b})`
+      lineWidth = 3
+    }
+    
+    // Draw cell border (thicker when hovered)
+    ctx.strokeStyle = borderColor
+    ctx.lineWidth = lineWidth
+    ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    
+    // Draw glint animation if active
+    if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
+      drawGlintAnimation(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, hoverState.glintProgress)
+    }
+  }
+}
+
+/**
+ * Render the bottom wall
+ */
+export const renderBottomWall = (ctx: CanvasRenderingContext2D) => {
+  // Draw outer border
+  ctx.fillStyle = BATTLEFIELD_BORDER
+  ctx.fillRect(BOTTOM_WALL_X, BOTTOM_WALL_Y, BOTTOM_WALL_WIDTH, BOTTOM_WALL_HEIGHT)
+  
+  // Fill with battlefield background
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(BOTTOM_WALL_X + WALL_BORDER_WIDTH, BOTTOM_WALL_Y + WALL_BORDER_WIDTH,
+               BOTTOM_WALL_WIDTH - WALL_BORDER_WIDTH * 2, BOTTOM_WALL_HEIGHT - WALL_BORDER_WIDTH * 2)
+  
+  // Draw individual cells (same number as battlefield columns)
+  const cellsCount = LEVEL_WIDTH
+  const cellSpacing = (BOTTOM_WALL_WIDTH - WALL_BORDER_WIDTH * 2 - cellsCount * WALL_CELL_SIZE) / (cellsCount - 1)
+  
+  for (let i = 0; i < cellsCount; i++) {
+    const cellX = BOTTOM_WALL_X + WALL_BORDER_WIDTH + i * (WALL_CELL_SIZE + cellSpacing)
+    const cellY = BOTTOM_WALL_Y + WALL_BORDER_WIDTH
+    
+    // Check for hover state
+    const hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === i)
+    let borderColor = BATTLEFIELD_CELL_BORDER
+    let lineWidth = 1
+    
+    if (hoverState?.isHovered) {
+      // Calculate pulsating effect - seamless loop starting from brightest
+      const currentTime = Date.now()
+      const elapsedTime = (currentTime - hoverState.pulsateStartTime) % 2000 // 2 second cycle
+      const rawProgress = elapsedTime / 2000
+      
+      // Create seamless sine wave oscillation starting from peak (1.0)
+      const pulsateProgress = (Math.sin(rawProgress * Math.PI * 2 - Math.PI / 2) + 1) / 2
+      
+      // Interpolate between dim and bright green (40% to 100% intensity)
+      const intensity = 0.4 + (pulsateProgress * 0.6) // 40% to 100% intensity
+      const r = Math.floor(76 * intensity)  // #4CAF50 red component
+      const g = Math.floor(175 * intensity) // #4CAF50 green component  
+      const b = Math.floor(80 * intensity)  // #4CAF50 blue component
+      
+      borderColor = `rgb(${r}, ${g}, ${b})`
+      lineWidth = 3
+    }
+    
+    // Draw cell border (thicker when hovered)
+    ctx.strokeStyle = borderColor
+    ctx.lineWidth = lineWidth
+    ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    
+    // Draw glint animation if active
+    if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
+      drawGlintAnimation(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, hoverState.glintProgress)
+    }
+  }
+}
+
+/**
+ * Draw diagonal glint animation across a cell
+ */
+const drawGlintAnimation = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number) => {
+  ctx.save()
+  
+  // Clip to cell bounds (slightly inset to avoid border overlap)
+  ctx.beginPath()
+  ctx.rect(x + 2, y + 2, width - 4, height - 4)
+  ctx.clip()
+  
+  // Calculate diagonal glint position
+  const glintWidth = 8 // Fixed glint width for more visibility
+  
+  // Calculate the diagonal line across the cell
+  const centerX = x + width / 2
+  const centerY = y + height / 2
+  
+  // Create a more visible gradient
+  const gradient = ctx.createLinearGradient(
+    centerX - glintWidth, centerY - glintWidth,
+    centerX + glintWidth, centerY + glintWidth
+  )
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)')
+  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.6)')
+  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 1.0)')
+  gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.6)')
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+  
+  // Calculate diagonal position based on progress
+  const startX = x - glintWidth
+  const startY = y - glintWidth
+  const endX = x + width + glintWidth
+  const endY = y + height + glintWidth
+  
+  const currentX = startX + (endX - startX) * progress
+  const currentY = startY + (endY - startY) * progress
+  
+  // Draw the glint as a diagonal rectangle
+  ctx.fillStyle = gradient
+  ctx.save()
+  ctx.translate(currentX, currentY)
+  ctx.rotate(Math.PI / 4) // 45 degree diagonal
+  ctx.fillRect(-glintWidth / 2, -height, glintWidth, height * 2)
+  ctx.restore()
+  
+  ctx.restore()
+}
+
+/**
+ * Render all walls
+ */
+export const renderWalls = (ctx: CanvasRenderingContext2D) => {
+  renderLeftWall(ctx)
+  renderRightWall(ctx)
+  renderBottomWall(ctx)
+}
+
+/**
+ * Handle wall cell hover
+ */
+export const handleWallHover = (x: number, y: number, renderCallback: () => void) => {
+  let foundHover = false
+  
+  // Clear all current hover states
+  wallHoverStates.forEach(state => state.isHovered = false)
+  
+  // Check left wall
+  if (isInLeftWall(x, y)) {
+    const cellIndex = getLeftWallCellIndex(x, y)
+    if (cellIndex !== -1) {
+      foundHover = true
+      let hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === cellIndex)
+      if (!hoverState) {
+        hoverState = { 
+          wall: 'left', 
+          cellIndex, 
+          isHovered: true, 
+          glintProgress: 0,
+          pulsateStartTime: Date.now()
+        }
+        wallHoverStates.push(hoverState)
+        startGlintAnimation(hoverState, renderCallback)
+        startPulsateAnimation(renderCallback)
+      } else if (!hoverState.isHovered) {
+        // Only start animation if this is a new hover (wasn't hovered before)
+        hoverState.isHovered = true
+        hoverState.pulsateStartTime = Date.now()
+        if (hoverState.glintProgress >= 1) {
+          // Reset and restart animation if previous animation was complete
+          startGlintAnimation(hoverState, renderCallback)
+        }
+        startPulsateAnimation(renderCallback)
+      } else {
+        hoverState.isHovered = true
+      }
+    }
+  }
+  
+  // Check right wall
+  if (isInRightWall(x, y)) {
+    const cellIndex = getRightWallCellIndex(x, y)
+    if (cellIndex !== -1) {
+      foundHover = true
+      let hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === cellIndex)
+      if (!hoverState) {
+        hoverState = { 
+          wall: 'right', 
+          cellIndex, 
+          isHovered: true, 
+          glintProgress: 0,
+          pulsateStartTime: Date.now()
+        }
+        wallHoverStates.push(hoverState)
+        startGlintAnimation(hoverState, renderCallback)
+        startPulsateAnimation(renderCallback)
+      } else if (!hoverState.isHovered) {
+        // Only start animation if this is a new hover (wasn't hovered before)
+        hoverState.isHovered = true
+        hoverState.pulsateStartTime = Date.now()
+        if (hoverState.glintProgress >= 1) {
+          // Reset and restart animation if previous animation was complete
+          startGlintAnimation(hoverState, renderCallback)
+        }
+        startPulsateAnimation(renderCallback)
+      } else {
+        hoverState.isHovered = true
+      }
+    }
+  }
+  
+  // Check bottom wall
+  if (isInBottomWall(x, y)) {
+    const cellIndex = getBottomWallCellIndex(x, y)
+    if (cellIndex !== -1) {
+      foundHover = true
+      let hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === cellIndex)
+      if (!hoverState) {
+        hoverState = { 
+          wall: 'bottom', 
+          cellIndex, 
+          isHovered: true, 
+          glintProgress: 0,
+          pulsateStartTime: Date.now()
+        }
+        wallHoverStates.push(hoverState)
+        startGlintAnimation(hoverState, renderCallback)
+        startPulsateAnimation(renderCallback)
+      } else if (!hoverState.isHovered) {
+        // Only start animation if this is a new hover (wasn't hovered before)
+        hoverState.isHovered = true
+        hoverState.pulsateStartTime = Date.now()
+        if (hoverState.glintProgress >= 1) {
+          // Reset and restart animation if previous animation was complete
+          startGlintAnimation(hoverState, renderCallback)
+        }
+        startPulsateAnimation(renderCallback)
+      } else {
+        hoverState.isHovered = true
+      }
+    }
+  }
+  
+  // Always request re-render if we found any hover
+  if (foundHover) {
+    renderCallback()
+  }
+}
+
+let pulsateAnimationId: number | null = null
+
+/**
+ * Start glint animation for a cell (runs once)
+ */
+const startGlintAnimation = (hoverState: WallCellHover, renderCallback: () => void) => {
+  // Reset and start the glint animation
+  hoverState.glintProgress = 0
+  
+  const animate = () => {
+    hoverState.glintProgress += 0.04 // Slightly faster animation
+    
+    if (hoverState.glintProgress >= 1) {
+      hoverState.glintProgress = 1
+      // Animation complete - render one final time
+      renderCallback()
+      return
+    }
+    
+    // Continue animation
+    renderCallback()
+    requestAnimationFrame(animate)
+  }
+  
+  animate()
+}
+
+/**
+ * Start pulsate animation that continues while cells are hovered
+ */
+const startPulsateAnimation = (renderCallback: () => void) => {
+  // Only start if not already running
+  if (pulsateAnimationId !== null) return
+  
+  const animate = () => {
+    // Check if any cells are still being hovered
+    const hasHoveredCells = wallHoverStates.some(state => state.isHovered)
+    
+    if (!hasHoveredCells) {
+      // No more hovered cells, stop animation
+      pulsateAnimationId = null
+      return
+    }
+    
+    // Continue pulsating animation
+    renderCallback()
+    pulsateAnimationId = requestAnimationFrame(animate)
+  }
+  
+  animate()
+}
+
+/**
+ * Check if coordinates are within left wall
+ */
+export const isInLeftWall = (x: number, y: number): boolean => {
+  return x >= LEFT_WALL_X && 
+         x <= LEFT_WALL_X + LEFT_WALL_WIDTH &&
+         y >= LEFT_WALL_Y && 
+         y <= LEFT_WALL_Y + LEFT_WALL_HEIGHT
+}
+
+/**
+ * Check if coordinates are within right wall
+ */
+export const isInRightWall = (x: number, y: number): boolean => {
+  return x >= RIGHT_WALL_X && 
+         x <= RIGHT_WALL_X + RIGHT_WALL_WIDTH &&
+         y >= RIGHT_WALL_Y && 
+         y <= RIGHT_WALL_Y + RIGHT_WALL_HEIGHT
+}
+
+/**
+ * Check if coordinates are within bottom wall
+ */
+export const isInBottomWall = (x: number, y: number): boolean => {
+  return x >= BOTTOM_WALL_X && 
+         x <= BOTTOM_WALL_X + BOTTOM_WALL_WIDTH &&
+         y >= BOTTOM_WALL_Y && 
+         y <= BOTTOM_WALL_Y + BOTTOM_WALL_HEIGHT
+}
+
+/**
+ * Check if coordinates are within any wall
+ */
+export const isInWall = (x: number, y: number): boolean => {
+  return isInLeftWall(x, y) || isInRightWall(x, y) || isInBottomWall(x, y)
+}
+
+/**
+ * Get cell index for left wall
+ */
+const getLeftWallCellIndex = (x: number, y: number): number => {
+  if (!isInLeftWall(x, y)) return -1
+  
+  // Check if within the cell area (excluding outer border)
+  const cellAreaStartX = LEFT_WALL_X + WALL_BORDER_WIDTH
+  const cellAreaStartY = LEFT_WALL_Y + WALL_BORDER_WIDTH
+  const cellAreaEndX = LEFT_WALL_X + LEFT_WALL_WIDTH - WALL_BORDER_WIDTH
+  const cellAreaEndY = LEFT_WALL_Y + LEFT_WALL_HEIGHT - WALL_BORDER_WIDTH
+  
+  if (x < cellAreaStartX || x > cellAreaEndX || y < cellAreaStartY || y > cellAreaEndY) {
+    return -1
+  }
+  
+  const cellSpacing = (LEFT_WALL_HEIGHT - WALL_BORDER_WIDTH * 2 - LEVEL_HEIGHT * WALL_CELL_SIZE) / (LEVEL_HEIGHT - 1)
+  const relativeY = y - cellAreaStartY
+  
+  // Find which cell this Y coordinate is in
+  for (let i = 0; i < LEVEL_HEIGHT; i++) {
+    const cellY = i * (WALL_CELL_SIZE + cellSpacing)
+    if (relativeY >= cellY && relativeY <= cellY + WALL_CELL_SIZE) {
+      return i
+    }
+  }
+  
+  return -1
+}
+
+/**
+ * Get cell index for right wall
+ */
+const getRightWallCellIndex = (x: number, y: number): number => {
+  if (!isInRightWall(x, y)) return -1
+  
+  // Check if within the cell area (excluding outer border)
+  const cellAreaStartX = RIGHT_WALL_X + WALL_BORDER_WIDTH
+  const cellAreaStartY = RIGHT_WALL_Y + WALL_BORDER_WIDTH
+  const cellAreaEndX = RIGHT_WALL_X + RIGHT_WALL_WIDTH - WALL_BORDER_WIDTH
+  const cellAreaEndY = RIGHT_WALL_Y + RIGHT_WALL_HEIGHT - WALL_BORDER_WIDTH
+  
+  if (x < cellAreaStartX || x > cellAreaEndX || y < cellAreaStartY || y > cellAreaEndY) {
+    return -1
+  }
+  
+  const cellSpacing = (RIGHT_WALL_HEIGHT - WALL_BORDER_WIDTH * 2 - LEVEL_HEIGHT * WALL_CELL_SIZE) / (LEVEL_HEIGHT - 1)
+  const relativeY = y - cellAreaStartY
+  
+  // Find which cell this Y coordinate is in
+  for (let i = 0; i < LEVEL_HEIGHT; i++) {
+    const cellY = i * (WALL_CELL_SIZE + cellSpacing)
+    if (relativeY >= cellY && relativeY <= cellY + WALL_CELL_SIZE) {
+      return i
+    }
+  }
+  
+  return -1
+}
+
+/**
+ * Get cell index for bottom wall
+ */
+const getBottomWallCellIndex = (x: number, y: number): number => {
+  if (!isInBottomWall(x, y)) return -1
+  
+  // Check if within the cell area (excluding outer border)
+  const cellAreaStartX = BOTTOM_WALL_X + WALL_BORDER_WIDTH
+  const cellAreaStartY = BOTTOM_WALL_Y + WALL_BORDER_WIDTH
+  const cellAreaEndX = BOTTOM_WALL_X + BOTTOM_WALL_WIDTH - WALL_BORDER_WIDTH
+  const cellAreaEndY = BOTTOM_WALL_Y + BOTTOM_WALL_HEIGHT - WALL_BORDER_WIDTH
+  
+  if (x < cellAreaStartX || x > cellAreaEndX || y < cellAreaStartY || y > cellAreaEndY) {
+    return -1
+  }
+  
+  const cellSpacing = (BOTTOM_WALL_WIDTH - WALL_BORDER_WIDTH * 2 - LEVEL_WIDTH * WALL_CELL_SIZE) / (LEVEL_WIDTH - 1)
+  const relativeX = x - cellAreaStartX
+  
+  // Find which cell this X coordinate is in
+  for (let i = 0; i < LEVEL_WIDTH; i++) {
+    const cellX = i * (WALL_CELL_SIZE + cellSpacing)
+    if (relativeX >= cellX && relativeX <= cellX + WALL_CELL_SIZE) {
+      return i
+    }
+  }
+  
+  return -1
+}
