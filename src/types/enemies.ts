@@ -14,10 +14,12 @@ export interface EnemyType {
 
 export interface Enemy {
   id: string // unique identifier for this enemy instance
+  uuid: string // UUID for tracking and identification
   type: EnemyType
   x: number // battlefield cell x coordinate (left edge)
   y: number // battlefield cell y coordinate (top edge)
-  health: number // current health
+  health: number // current health (starts at type.health, decreases with damage)
+  maxHealth: number // maximum health for reference
   turnsSinceSpawn: number // how many turns this enemy has been alive
 }
 

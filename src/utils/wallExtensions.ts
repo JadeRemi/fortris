@@ -3,6 +3,7 @@ import { WallCell } from '../types/walls'
 import { getCachedImage } from './imageUtils'
 import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
 import { renderEnemyHealthNumbers } from './enemyUtils'
+import { generateUUID } from './uuidUtils'
 import {
   LEVEL_HEIGHT,
   LEVEL_WIDTH,
@@ -86,10 +87,12 @@ export const placeUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIndex
   
   cell.isOccupied = true
   cell.occupiedBy = unitTypeId
+  cell.unitUuid = generateUUID()
   
   // Set initial health based on unit type
   const unitType = getUnitById(unitTypeId)
   cell.currentHealth = unitType?.maxHealth || 10
+  cell.maxHealth = unitType?.maxHealth || 10
   
   return true
 }

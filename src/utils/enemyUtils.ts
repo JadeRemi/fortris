@@ -1,11 +1,12 @@
 import { Enemy, EnemyType, BattlefieldCell } from '../types/enemies'
 import { ENEMY_TYPES } from '../config/enemiesConfig'
+import { generateUUID } from './uuidUtils'
 import {
   LEVEL_WIDTH,
   LEVEL_HEIGHT,
   LEVEL_NEGATIVE_ROWS,
   ENEMY_SPAWN_CHANCE,
-  ENEMY_HEALTH,
+
   BATTLEFIELD_X,
   BATTLEFIELD_Y,
   BATTLEFIELD_CELL_SIZE,
@@ -177,10 +178,12 @@ export const spawnEnemy = (enemyType: EnemyType): boolean => {
   
   const newEnemy: Enemy = {
     id: `${enemyType.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    uuid: generateUUID(),
     type: enemyType,
     x: position.x,
     y: position.y,
-    health: ENEMY_HEALTH,
+    health: enemyType.health, // Use the enemy type's health value
+    maxHealth: enemyType.health, // Store max health for reference
     turnsSinceSpawn: 0
   }
   
@@ -285,36 +288,7 @@ export const renderEnemies = (ctx: CanvasRenderingContext2D): void => {
   }
 }
 
-/**
- * Render health numbers on all enemies (when stats enabled)
- */
-export const renderEnemyHealthNumbers = (ctx: CanvasRenderingContext2D): void => {
-  ctx.save()
-  ctx.fillStyle = '#FFFFFF'
-  ctx.strokeStyle = '#000000'
-  ctx.lineWidth = 2
-  ctx.font = '14px "Pixelify Sans", monospace'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'top'
-  
-  for (const enemy of enemies) {
-    // Only render for visible enemies
-    if (enemy.y + enemy.type.height <= 0) {
-      continue // Enemy is completely above visible area
-    }
-    
-    // Calculate center position for health text
-    const coords = getBattlefieldCellCoords(enemy.x, Math.max(enemy.y, 0))
-    const centerX = coords.x + (enemy.type.width * BATTLEFIELD_CELL_SIZE) / 2
-    const topY = coords.y + 2 // Small offset from top
-    
-    // Draw stroke first, then fill
-    ctx.strokeText(enemy.health.toString(), centerX, topY)
-    ctx.fillText(enemy.health.toString(), centerX, topY)
-  }
-  
-  ctx.restore()
-}
+
 
 // Render single enemy with gradual reveal effect
 export const renderEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy): void => {
@@ -373,6 +347,57 @@ export const getEnemyAt = (x: number, y: number): Enemy | null => {
   if (!cell || !cell.enemyId) return null
   
   return enemies.find(enemy => enemy.id === cell.enemyId) || null
+}
+
+/**
+ * Remove an enemy from the battlefield
+ */
+export const removeEnemy = (enemyToRemove: Enemy): boolean => {
+  const enemyIndex = enemies.findIndex(enemy => enemy.uuid === enemyToRemove.uuid)
+  if (enemyIndex === -1) {
+    return false // Enemy not found
+  }
+  
+  // Clear battlefield cells occupied by this enemy
+  for (let dy = 0; dy < enemyToRemove.type.height; dy++) {
+    for (let dx = 0; dx < enemyToRemove.type.width; dx++) {
+      setBattlefieldCell(enemyToRemove.x + dx, enemyToRemove.y + dy, undefined)
+    }
+  }
+  
+  // Remove enemy from array
+  enemies.splice(enemyIndex, 1)
+  return true
+}
+
+/**
+ * Render health numbers on all enemies
+ */
+export const renderEnemyHealthNumbers = (ctx: CanvasRenderingContext2D): void => {
+  ctx.save()
+  ctx.fillStyle = '#FFFFFF'
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = 2
+  ctx.font = '14px "Pixelify Sans", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  
+  enemies.forEach(enemy => {
+    // Only render health numbers for visible enemies (y >= 0)
+    if (enemy.y >= 0) {
+      const coords = getBattlefieldCellCoords(enemy.x, enemy.y)
+      
+      // Calculate center position for multi-cell enemies
+      const enemyCenterX = coords.x + (enemy.type.width * (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_CELL_BORDER_WIDTH)) / 2
+      const enemyTopY = coords.y + 2 // Small offset from top
+      
+      // Draw stroke first, then fill
+      ctx.strokeText(enemy.health.toString(), enemyCenterX, enemyTopY)
+      ctx.fillText(enemy.health.toString(), enemyCenterX, enemyTopY)
+    }
+  })
+  
+  ctx.restore()
 }
 
 // Debug function to log current enemy state (disabled for production)

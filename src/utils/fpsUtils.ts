@@ -96,8 +96,6 @@ export const renderFPS = (ctx: CanvasRenderingContext2D): void => {
  * Render turn counter display on canvas (next to FPS)
  */
 export const renderTurnCounter = (ctx: CanvasRenderingContext2D, turnNumber: number): void => {
-  if (turnNumber <= 0) return // Don't display if no turns have started
-  
   ctx.save()
   
   // Position next to FPS display

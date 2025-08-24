@@ -29,9 +29,10 @@ import {
 import { getWallCell } from './wallExtensions'
 import { UNIT_TYPES } from '../config/unitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
-import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt } from './enemyUtils'
+import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy } from './enemyUtils'
 import { battlefieldToCanvas } from './battlefieldUtils'
 import { addLogMessage } from './logsUtils'
+import { generateUUID } from './uuidUtils'
 
 // Combat state management
 interface CombatState {
@@ -62,6 +63,7 @@ interface HitAnimation {
 
 interface Projectile {
   id: string
+  uuid: string // UUID for tracking and identification
   x: number
   y: number
   directionX: number
@@ -310,6 +312,7 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
 
 /**
  * Perform melee attack on adjacent battlefield cell
+ * Only attacks if there's an enemy in the target cell
  */
 const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   let targetCol: number, targetRow: number
@@ -335,6 +338,15 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   // Check if there's an enemy in the target cell
   const targetEnemy = getEnemyAt(targetCol, targetRow)
   
+  // Only perform attack if there's an enemy to hit
+  if (!targetEnemy) {
+    return // Skip this attack - no target
+  }
+  
+  // Deal damage to the enemy
+  const damage = 1 // Fixed damage for now
+  targetEnemy.health -= damage
+  
   // Add hit animation
   hitAnimations.push({
     battlefieldCol: targetCol,
@@ -344,13 +356,14 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
     isActive: true
   })
   
-  // Add combat log if an enemy was hit
-  if (targetEnemy) {
-    const attackerName = position.wallType === 'left' || position.wallType === 'right' || position.wallType === 'bottom' 
-      ? 'Swordsman' // Currently only swordsmen do melee attacks
-      : 'Unknown'
-    const damage = 1 // Fixed damage for now
-    addLogMessage(`${targetEnemy.type.name} is hit by ${attackerName} for ${damage} damage`)
+  // Add combat log
+  const attackerName = 'Swordsman' // Currently only swordsmen do melee attacks
+  addLogMessage(`${targetEnemy.type.name} is hit by ${attackerName} for ${damage} damage`)
+  
+  // Check if enemy should be removed (health <= 0)
+  if (targetEnemy.health <= 0) {
+    removeEnemy(targetEnemy)
+    addLogMessage(`${targetEnemy.type.name} is defeated!`)
   }
 }
 
@@ -388,6 +401,7 @@ const performRangedAttack = (position: UnitPosition, currentTime: number) => {
   // Create projectile
   const projectile: Projectile = {
     id: `arrow_${currentTime}_${Math.random()}`,
+    uuid: generateUUID(),
     x: startX,
     y: startY,
     directionX,

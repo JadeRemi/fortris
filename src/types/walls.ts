@@ -7,7 +7,9 @@ export interface WallCell {
   index: number // Position within the wall
   isOccupied: boolean
   occupiedBy?: string // Unit type ID (e.g., 'swordsman')
+  unitUuid?: string // UUID of the unit placed here
   currentHealth?: number // Current health of the unit placed here
+  maxHealth?: number // Maximum health of the unit for reference
   // Add more cell properties as needed for game logic
 }
 
