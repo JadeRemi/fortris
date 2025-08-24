@@ -97,45 +97,158 @@ const renderSwordsmanCell = (ctx: CanvasRenderingContext2D) => {
     drawSelectionAnimation(ctx, ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE)
   }
   
+  // Draw numeric counter in bottom right corner (over everything else)
+  drawUnitCounter(ctx, ARMY_UNIT_CELL_X, ARMY_UNIT_CELL_Y, ARMY_UNIT_CELL_SIZE, 1)
+  
   ctx.restore()
 }
 
 /**
- * Draw circling selection animation around a cell
+ * Draw numeric counter in bottom right corner of a cell
+ */
+const drawUnitCounter = (ctx: CanvasRenderingContext2D, cellX: number, cellY: number, cellSize: number, count: number) => {
+  ctx.save()
+  
+  // Position in bottom right corner - 1/3 of cell size 
+  const counterWidth = Math.floor(cellSize / 3)
+  const counterHeight = Math.floor(cellSize / 3)
+  const counterX = cellX + cellSize - counterWidth
+  const counterY = cellY + cellSize - counterHeight
+  
+  // Draw counter background (semi-transparent dark)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
+  ctx.fillRect(counterX, counterY, counterWidth, counterHeight)
+  
+  // No border (removed green border as requested)
+  
+  // Draw counter number - font size relative to counter size
+  ctx.fillStyle = TEXT_PRIMARY
+  const fontSize = Math.max(8, Math.floor(counterHeight * 0.7)) // 70% of counter height, minimum 8px
+  ctx.font = `${fontSize}px "Pixelify Sans", monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  
+  const textX = counterX + counterWidth / 2
+  const textY = counterY + counterHeight / 2
+  ctx.fillText(count.toString(), textX, textY)
+  
+  ctx.restore()
+}
+
+/**
+ * Draw square selection animation around a cell with rounded borders
  */
 const drawSelectionAnimation = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
   const currentTime = Date.now()
   const elapsedTime = (currentTime - swordsmanState.selectionStartTime) % 2000 // 2 second cycle
   const progress = elapsedTime / 2000 // 0 to 1
   
-  // Create spinning gradient effect
-  const centerX = x + size / 2
-  const centerY = y + size / 2
-  const radius = size / 2 + 2 // Slightly outside the cell
-  
   ctx.save()
   ctx.strokeStyle = '#4CAF50' // Same green as wall hover
   ctx.lineWidth = 3
   
-  // Draw multiple arcs to create spinning effect
+  const borderOffset = 2 // Distance outside the cell
+  const squareX = x - borderOffset
+  const squareY = y - borderOffset  
+  const squareSize = size + (borderOffset * 2)
+  const cornerRadius = 6 // Slightly rounded corners
+  
+  // Create spinning gradient effect by drawing segments with varying opacity
   const segments = 8
-  const segmentLength = (Math.PI * 2) / segments
-  const rotationOffset = progress * Math.PI * 2 // Full rotation per cycle
+  const segmentLength = squareSize * 4 / segments // Perimeter divided by segments
+  const rotationOffset = progress * (squareSize * 4) // Full rotation around perimeter
   
   for (let i = 0; i < segments; i++) {
-    const startAngle = (i * segmentLength) + rotationOffset
-    const endAngle = startAngle + (segmentLength * 0.7) // Gaps between segments
+    const segmentStart = (i * segmentLength + rotationOffset) % (squareSize * 4)
+    const segmentEnd = segmentStart + (segmentLength * 0.7) // Gaps between segments
     
-    // Vary opacity based on position in circle for gradient effect
-    const opacity = 0.3 + 0.7 * Math.sin((startAngle + rotationOffset) / 2)
+    // Vary opacity based on position for gradient effect
+    const opacity = 0.3 + 0.7 * Math.sin((i / segments) * Math.PI * 2 + progress * Math.PI * 2)
     ctx.globalAlpha = Math.max(0.2, opacity)
     
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, radius, startAngle, endAngle)
-    ctx.stroke()
+    // Draw rounded segment on the square perimeter
+    drawRoundedSquareSegment(ctx, squareX, squareY, squareSize, cornerRadius, segmentStart, segmentEnd)
   }
   
   ctx.restore()
+}
+
+/**
+ * Draw a rounded segment of the square border
+ */
+const drawRoundedSquareSegment = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, cornerRadius: number, start: number, end: number) => {
+  const perimeter = size * 4
+  
+  // Clamp values to perimeter
+  start = Math.max(0, Math.min(perimeter, start))
+  end = Math.max(0, Math.min(perimeter, end))
+  
+  if (start >= end) return
+  
+  ctx.beginPath()
+  
+  // Calculate which sides the segment spans, accounting for rounded corners
+  const topLength = size - cornerRadius * 2
+  const rightLength = size - cornerRadius * 2  
+  const bottomLength = size - cornerRadius * 2
+  const leftLength = size - cornerRadius * 2
+  
+  const topStart = cornerRadius
+  const rightStart = topStart + topLength + cornerRadius
+  const bottomStart = rightStart + rightLength + cornerRadius  
+  const leftStart = bottomStart + bottomLength + cornerRadius
+  
+  if (start < rightStart && end > topStart) {
+    // Top side
+    const segStart = Math.max(start - topStart, 0)
+    const segEnd = Math.min(end - topStart, topLength)
+    if (segEnd > segStart) {
+      ctx.moveTo(x + cornerRadius + segStart, y)
+      ctx.lineTo(x + cornerRadius + segEnd, y)
+    }
+  }
+  
+  if (start < bottomStart && end > rightStart) {
+    // Right side  
+    const segStart = Math.max(start - rightStart, 0)
+    const segEnd = Math.min(end - rightStart, rightLength)
+    if (segEnd > segStart) {
+      ctx.moveTo(x + size, y + cornerRadius + segStart)
+      ctx.lineTo(x + size, y + cornerRadius + segEnd)
+    }
+  }
+  
+  if (start < leftStart && end > bottomStart) {
+    // Bottom side
+    const segStart = Math.max(start - bottomStart, 0) 
+    const segEnd = Math.min(end - bottomStart, bottomLength)
+    if (segEnd > segStart) {
+      ctx.moveTo(x + size - cornerRadius - segStart, y + size)
+      ctx.lineTo(x + size - cornerRadius - segEnd, y + size)
+    }
+  }
+  
+  if (end > leftStart) {
+    // Left side
+    const segStart = Math.max(start - leftStart, 0)
+    const segEnd = Math.min(end - leftStart, leftLength)
+    if (segEnd > segStart) {
+      ctx.moveTo(x, y + size - cornerRadius - segStart)
+      ctx.lineTo(x, y + size - cornerRadius - segEnd)
+    }
+  }
+  
+  // Draw corner arcs if segment spans across corners
+  if (start <= topStart + cornerRadius && end >= topStart) {
+    // Top-right corner arc
+    const startAngle = Math.max(0, (start - topStart) / cornerRadius) * Math.PI / 2 - Math.PI / 2
+    const endAngle = Math.min(1, (end - topStart) / cornerRadius) * Math.PI / 2 - Math.PI / 2
+    if (endAngle > startAngle) {
+      ctx.arc(x + size - cornerRadius, y + cornerRadius, cornerRadius, startAngle, endAngle)
+    }
+  }
+  
+  ctx.stroke()
 }
 
 /**

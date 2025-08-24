@@ -40,7 +40,7 @@ export const AMBER = '#ffbf00'
 export const COPPER = '#b87333'
 
 // Battlefield specific  
-export const BATTLEFIELD_BORDER = '#c0c0c0' // Light grey for visibility
+export const BATTLEFIELD_BORDER = '#4a3728' // Dark brown for main battlefield borders
 export const BATTLEFIELD_CELL_BORDER = '#4a3728' // Dark brown for better contrast
 export const BATTLEFIELD_CELL_EMPTY = '#2a2017'
 

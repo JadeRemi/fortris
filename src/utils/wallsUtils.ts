@@ -34,6 +34,19 @@ interface WallCellHover {
 let wallHoverStates: WallCellHover[] = []
 
 /**
+ * Draw a rounded rectangle (stroke only)
+ */
+const drawRoundedRect = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) => {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.arcTo(x + width, y, x + width, y + height, radius)
+  ctx.arcTo(x + width, y + height, x, y + height, radius)
+  ctx.arcTo(x, y + height, x, y, radius)
+  ctx.arcTo(x, y, x + width, y, radius)
+  ctx.closePath()
+}
+
+/**
  * Render the left wall
  */
 export const renderLeftWall = (ctx: CanvasRenderingContext2D) => {
@@ -58,16 +71,16 @@ export const renderLeftWall = (ctx: CanvasRenderingContext2D) => {
     let lineWidth = 1
     
     if (hoverState?.isHovered) {
-      // Calculate pulsating effect - seamless loop starting from brightest
+      // Calculate pulsating effect - seamless loop starting from brightest and darkening
       const currentTime = Date.now()
       const elapsedTime = (currentTime - hoverState.pulsateStartTime) % 2000 // 2 second cycle
       const rawProgress = elapsedTime / 2000
       
-      // Create seamless sine wave oscillation starting from peak (1.0)
+      // Create seamless sine wave oscillation starting from bright then going to dim
       const pulsateProgress = (Math.sin(rawProgress * Math.PI * 2 - Math.PI / 2) + 1) / 2
       
-      // Interpolate between dim and bright green (40% to 100% intensity)
-      const intensity = 0.4 + (pulsateProgress * 0.6) // 40% to 100% intensity
+      // Interpolate between bright and dim green (100% to 40% intensity) - starts bright!
+      const intensity = 1.0 - (pulsateProgress * 0.6) // 100% to 40% intensity (starts bright, gets dim)
       const r = Math.floor(76 * intensity)  // #4CAF50 red component
       const g = Math.floor(175 * intensity) // #4CAF50 green component  
       const b = Math.floor(80 * intensity)  // #4CAF50 blue component
@@ -76,10 +89,18 @@ export const renderLeftWall = (ctx: CanvasRenderingContext2D) => {
       lineWidth = 3
     }
     
-    // Draw cell border (thicker when hovered)
+    // Draw cell border (thicker when hovered, with small border-radius when hovered)
     ctx.strokeStyle = borderColor
     ctx.lineWidth = lineWidth
-    ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    
+    if (hoverState?.isHovered) {
+      // Draw rounded rectangle for hover state
+      drawRoundedRect(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, 3) // 3px radius
+      ctx.stroke()
+    } else {
+      // Draw sharp rectangle for normal state
+      ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    }
     
     // Draw glint animation if active
     if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
@@ -113,16 +134,16 @@ export const renderRightWall = (ctx: CanvasRenderingContext2D) => {
     let lineWidth = 1
     
     if (hoverState?.isHovered) {
-      // Calculate pulsating effect - seamless loop starting from brightest
+      // Calculate pulsating effect - seamless loop starting from brightest and darkening
       const currentTime = Date.now()
       const elapsedTime = (currentTime - hoverState.pulsateStartTime) % 2000 // 2 second cycle
       const rawProgress = elapsedTime / 2000
       
-      // Create seamless sine wave oscillation starting from peak (1.0)
+      // Create seamless sine wave oscillation starting from bright then going to dim
       const pulsateProgress = (Math.sin(rawProgress * Math.PI * 2 - Math.PI / 2) + 1) / 2
       
-      // Interpolate between dim and bright green (40% to 100% intensity)
-      const intensity = 0.4 + (pulsateProgress * 0.6) // 40% to 100% intensity
+      // Interpolate between bright and dim green (100% to 40% intensity) - starts bright!
+      const intensity = 1.0 - (pulsateProgress * 0.6) // 100% to 40% intensity (starts bright, gets dim)
       const r = Math.floor(76 * intensity)  // #4CAF50 red component
       const g = Math.floor(175 * intensity) // #4CAF50 green component  
       const b = Math.floor(80 * intensity)  // #4CAF50 blue component
@@ -131,10 +152,18 @@ export const renderRightWall = (ctx: CanvasRenderingContext2D) => {
       lineWidth = 3
     }
     
-    // Draw cell border (thicker when hovered)
+    // Draw cell border (thicker when hovered, with small border-radius when hovered)
     ctx.strokeStyle = borderColor
     ctx.lineWidth = lineWidth
-    ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    
+    if (hoverState?.isHovered) {
+      // Draw rounded rectangle for hover state
+      drawRoundedRect(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, 3) // 3px radius
+      ctx.stroke()
+    } else {
+      // Draw sharp rectangle for normal state
+      ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    }
     
     // Draw glint animation if active
     if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {
@@ -170,16 +199,16 @@ export const renderBottomWall = (ctx: CanvasRenderingContext2D) => {
     let lineWidth = 1
     
     if (hoverState?.isHovered) {
-      // Calculate pulsating effect - seamless loop starting from brightest
+      // Calculate pulsating effect - seamless loop starting from brightest and darkening
       const currentTime = Date.now()
       const elapsedTime = (currentTime - hoverState.pulsateStartTime) % 2000 // 2 second cycle
       const rawProgress = elapsedTime / 2000
       
-      // Create seamless sine wave oscillation starting from peak (1.0)
+      // Create seamless sine wave oscillation starting from bright then going to dim
       const pulsateProgress = (Math.sin(rawProgress * Math.PI * 2 - Math.PI / 2) + 1) / 2
       
-      // Interpolate between dim and bright green (40% to 100% intensity)
-      const intensity = 0.4 + (pulsateProgress * 0.6) // 40% to 100% intensity
+      // Interpolate between bright and dim green (100% to 40% intensity) - starts bright!
+      const intensity = 1.0 - (pulsateProgress * 0.6) // 100% to 40% intensity (starts bright, gets dim)
       const r = Math.floor(76 * intensity)  // #4CAF50 red component
       const g = Math.floor(175 * intensity) // #4CAF50 green component  
       const b = Math.floor(80 * intensity)  // #4CAF50 blue component
@@ -188,10 +217,18 @@ export const renderBottomWall = (ctx: CanvasRenderingContext2D) => {
       lineWidth = 3
     }
     
-    // Draw cell border (thicker when hovered)
+    // Draw cell border (thicker when hovered, with small border-radius when hovered)
     ctx.strokeStyle = borderColor
     ctx.lineWidth = lineWidth
-    ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    
+    if (hoverState?.isHovered) {
+      // Draw rounded rectangle for hover state
+      drawRoundedRect(ctx, cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE, 3) // 3px radius
+      ctx.stroke()
+    } else {
+      // Draw sharp rectangle for normal state
+      ctx.strokeRect(cellX, cellY, WALL_CELL_SIZE, WALL_CELL_SIZE)
+    }
     
     // Draw glint animation if active
     if (hoverState && hoverState.glintProgress > 0 && hoverState.glintProgress < 1) {

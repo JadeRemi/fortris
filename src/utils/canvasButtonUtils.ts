@@ -22,17 +22,17 @@ export const drawPixelButton = (ctx: CanvasRenderingContext2D, button: CanvasBut
   const x = CONTROLS_X + relativeX
   const y = CONTROLS_Y + relativeY
   
-  // Choose colors based on state (darker button, lighter border)
-  const borderColor = '#a0a0a0' // Light grey border
-  const bgColor = isPressed ? '#1a1a1a' : (isHovered ? '#4a4a4a' : '#333333') // More noticeable hover
-  const shadowColor = '#0a0a0a' // Very dark shadow
-  const highlightColor = isHovered ? '#f0f0f0' : '#d0d0d0' // Brighter highlight on hover
+  // Choose colors based on state (brown button, darker and more pale)
+  const borderColor = '#4a2c17' // Darker brown border
+  const bgColor = isPressed ? '#5d2f09' : (isHovered ? '#7a4a2e' : '#663300') // Brown shades
+  const shadowColor = '#3d1f06' // Dark brown shadow
+  const highlightColor = isHovered ? '#8b7355' : '#6b5b47' // More pale, darker highlight
   
   // Save context
   ctx.save()
   
-  // Draw more pronounced indented corner effect
-  const cornerSize = 12 // Larger corners for more pronounced effect
+  // Draw simple rounded corners
+  const cornerSize = 6 // Small border-radius
   
   // Draw outer border/highlight
   ctx.fillStyle = highlightColor
@@ -62,35 +62,17 @@ export const drawPixelButton = (ctx: CanvasRenderingContext2D, button: CanvasBut
 }
 
 /**
- * Draw a rectangle with sharp indented corners (square cutouts)
+ * Draw a simple rounded rectangle
  */
 const drawIndentedRect = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, cornerSize: number) => {
+  const radius = Math.min(cornerSize, width / 2, height / 2)
+  
   ctx.beginPath()
-  
-  // Create path with sharp indented corners (like square cutouts)
-  // Start at top-left corner (after the indent)
-  ctx.moveTo(x + cornerSize, y + cornerSize)
-  
-  // Top edge (with indented corners)
-  ctx.lineTo(x + cornerSize, y)
-  ctx.lineTo(x + width - cornerSize, y)
-  ctx.lineTo(x + width - cornerSize, y + cornerSize)
-  
-  // Right edge (with indented corners)
-  ctx.lineTo(x + width, y + cornerSize)
-  ctx.lineTo(x + width, y + height - cornerSize)
-  ctx.lineTo(x + width - cornerSize, y + height - cornerSize)
-  
-  // Bottom edge (with indented corners)
-  ctx.lineTo(x + width - cornerSize, y + height)
-  ctx.lineTo(x + cornerSize, y + height)
-  ctx.lineTo(x + cornerSize, y + height - cornerSize)
-  
-  // Left edge (with indented corners)
-  ctx.lineTo(x, y + height - cornerSize)
-  ctx.lineTo(x, y + cornerSize)
-  ctx.lineTo(x + cornerSize, y + cornerSize)
-  
+  ctx.moveTo(x + radius, y)
+  ctx.arcTo(x + width, y, x + width, y + height, radius)
+  ctx.arcTo(x + width, y + height, x, y + height, radius)
+  ctx.arcTo(x, y + height, x, y, radius)
+  ctx.arcTo(x, y, x + width, y, radius)
   ctx.closePath()
   ctx.fill()
 }

@@ -1,10 +1,13 @@
 import GameCanvas from './components/GameCanvas'
+import ErrorBoundary from './components/ErrorBoundary'
 import './App.css'
 
 function App() {
   return (
     <div className="App">
-      <GameCanvas />
+      <ErrorBoundary>
+        <GameCanvas />
+      </ErrorBoundary>
     </div>
   )
 }

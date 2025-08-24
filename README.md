@@ -12,6 +12,15 @@ yarn test:run     # Run tests once
 yarn lint         # Run ESLint
 ```
 
+## Linting Setup
+
+For real-time linting while coding:
+
+- **VSCode**: Install the ESLint extension (`ms-vscode.vscode-eslint`)
+- **Other editors**: Configure your editor to use the project's `.eslintrc` file
+- **Manual**: Run `yarn lint` to check for linting issues
+- **Auto-fix**: Run `yarn lint --fix` to automatically fix fixable issues
+
 ## Project Structure
 
 ```
