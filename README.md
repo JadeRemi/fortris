@@ -46,6 +46,13 @@ The `yarn deploy` command will:
 - Push the built files to GitHub Pages
 - Your game will be available at `https://<username>.github.io/<repository>`
 
+**Configuration Notes:**
+- The `vite.config.ts` includes `base: '/fortris/'` to ensure assets load correctly on GitHub Pages
+- This base path must match your repository name for proper deployment
+- Without this, you'll get MIME type errors when GitHub Pages tries to serve JS/CSS files
+- Asset paths use `getImagePath()` utility to automatically adapt to the deployment base path
+- This ensures images load correctly in both development (`/assets/...`) and production (`/fortris/assets/...`)
+
 ## Linting Setup
 
 For real-time linting while coding:

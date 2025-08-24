@@ -1,5 +1,6 @@
 // Enemies Configuration
 import type { EnemyType } from '../types/enemies'
+import { getImagePath } from '../utils/assetUtils'
 
 // Available enemy types
 export const ENEMY_TYPES = {
@@ -8,7 +9,7 @@ export const ENEMY_TYPES = {
     name: 'Skull',
     width: 1,
     height: 1,
-    assetPath: '/assets/images/skull.png',
+    assetPath: getImagePath('skull.png'),
     assetWidth: 64,
     assetHeight: 64,
     health: 10,
@@ -20,7 +21,7 @@ export const ENEMY_TYPES = {
     name: 'Slime',
     width: 2,
     height: 2,
-    assetPath: '/assets/images/slime.png',
+    assetPath: getImagePath('slime.png'),
     assetWidth: 128,
     assetHeight: 128,
     health: 10,
@@ -32,7 +33,7 @@ export const ENEMY_TYPES = {
     name: 'Lich',
     width: 1,
     height: 2,
-    assetPath: '/assets/images/lich.png',
+    assetPath: getImagePath('lich.png'),
     assetWidth: 64,
     assetHeight: 128,
     health: 10,
@@ -44,7 +45,7 @@ export const ENEMY_TYPES = {
     name: 'Ogre', 
     width: 3,
     height: 3,
-    assetPath: '/assets/images/ogre.png',
+    assetPath: getImagePath('ogre.png'),
     assetWidth: 128,
     assetHeight: 128,
     health: 10,
@@ -56,7 +57,7 @@ export const ENEMY_TYPES = {
     name: 'Skeleton',
     width: 1,
     height: 1,
-    assetPath: '/assets/images/skeleton.png',
+    assetPath: getImagePath('skeleton.png'),
     assetWidth: 128,
     assetHeight: 128,
     health: 10,

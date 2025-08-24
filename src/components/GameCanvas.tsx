@@ -13,6 +13,7 @@ import { drawPixelButton, createButton, isPointInButton, type CanvasButton } fro
 import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter } from '../utils/fpsUtils'
 import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, skipTurn } from '../utils/combatUtils'
 import { renderLogs } from '../utils/logsUtils'
+import { getImagePath } from '../utils/assetUtils'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig'
 import { TEXT_PRIMARY } from '../config/palette'
 
@@ -155,14 +156,14 @@ const GameCanvas: React.FC = () => {
     Promise.all([
       loadGameFont(),
       preloadImages([
-        '/assets/images/swordsman.png',
-        '/assets/images/bowman.png',
-        '/assets/images/arrow.png', // Preload arrow for projectiles
-        '/assets/images/skull.png', // Preload skull enemy
-        '/assets/images/slime.png', // Preload slime enemy
-        '/assets/images/lich.png',  // Preload lich enemy
-        '/assets/images/ogre.png',  // Preload ogre enemy
-        '/assets/images/skeleton.png' // Preload skeleton enemy (no natural spawning)
+        getImagePath('swordsman.png'),
+        getImagePath('bowman.png'),
+        getImagePath('arrow.png'), // Preload arrow for projectiles
+        getImagePath('skull.png'), // Preload skull enemy
+        getImagePath('slime.png'), // Preload slime enemy
+        getImagePath('lich.png'),  // Preload lich enemy
+        getImagePath('ogre.png'),  // Preload ogre enemy
+        getImagePath('skeleton.png') // Preload skeleton enemy (no natural spawning)
       ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {

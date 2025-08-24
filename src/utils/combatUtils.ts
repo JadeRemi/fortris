@@ -33,6 +33,7 @@ import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefie
 import { battlefieldToCanvas } from './battlefieldUtils'
 import { addLogMessage } from './logsUtils'
 import { generateUUID } from './uuidUtils'
+import { getImagePath } from './assetUtils'
 
 // Combat state management
 interface CombatState {
@@ -579,7 +580,7 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
     ctx.save()
     
     // Try to get the arrow image
-    const arrowImage = getCachedImage('/assets/images/arrow.png')
+    const arrowImage = getCachedImage(getImagePath('arrow.png'))
     if (arrowImage) {
       // Calculate rotation based on direction and sprite orientation
       let rotation = 0

@@ -1,4 +1,5 @@
 // Units Configuration
+import { getImagePath } from '../utils/assetUtils'
 
 export interface UnitType {
   id: string
@@ -19,7 +20,7 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     name: 'Swordsman',
     width: 1,
     height: 1,
-    imagePath: '/assets/images/swordsman.png',
+    imagePath: getImagePath('swordsman.png'),
     assetWidth: 128,
     assetHeight: 128,
     maxHealth: 10,
@@ -30,7 +31,7 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     name: 'Bowman',
     width: 1,
     height: 1,
-    imagePath: '/assets/images/bowman.png',
+    imagePath: getImagePath('bowman.png'),
     assetWidth: 128,
     assetHeight: 128,
     maxHealth: 10,
