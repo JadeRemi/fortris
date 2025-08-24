@@ -579,7 +579,7 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
     ctx.save()
     
     // Try to get the arrow image
-    const arrowImage = getCachedImage('/src/assets/images/arrow.png')
+    const arrowImage = getCachedImage('/assets/images/arrow.png')
     if (arrowImage) {
       // Calculate rotation based on direction and sprite orientation
       let rotation = 0

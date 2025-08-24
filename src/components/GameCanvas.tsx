@@ -155,14 +155,14 @@ const GameCanvas: React.FC = () => {
     Promise.all([
       loadGameFont(),
       preloadImages([
-        '/src/assets/images/swordsman.png',
-        '/src/assets/images/bowman.png',
-        '/src/assets/images/arrow.png', // Preload arrow for projectiles
-        '/src/assets/images/skull.png', // Preload skull enemy
-        '/src/assets/images/slime.png', // Preload slime enemy
-        '/src/assets/images/lich.png',  // Preload lich enemy
-        '/src/assets/images/ogre.png',  // Preload ogre enemy
-        '/src/assets/images/skeleton.png' // Preload skeleton enemy (no natural spawning)
+        '/assets/images/swordsman.png',
+        '/assets/images/bowman.png',
+        '/assets/images/arrow.png', // Preload arrow for projectiles
+        '/assets/images/skull.png', // Preload skull enemy
+        '/assets/images/slime.png', // Preload slime enemy
+        '/assets/images/lich.png',  // Preload lich enemy
+        '/assets/images/ogre.png',  // Preload ogre enemy
+        '/assets/images/skeleton.png' // Preload skeleton enemy (no natural spawning)
       ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {
