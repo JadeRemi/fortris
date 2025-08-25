@@ -4,12 +4,13 @@ import { createGameLoop } from '../utils/gameLoop'
 import { renderNoiseBackground } from '../utils/noiseUtils'
 import { renderBattlefield } from '../utils/battlefieldUtils'
 import { renderWalls, handleWallHover, isInWall } from '../utils/wallsUtils'
-import { renderControls, renderArmy, isPointInAnyUnitCell, renderCursorSprite, handleGlobalClick, tryPlaceUnitOnWall, getSelectionState, handleArmyMouseMove, handleArmyClick, getSwordsmanPlusButtonX, getBowmanPlusButtonX, getMonkPlusButtonX } from '../utils/controlsUtils'
+import { renderControls, renderArmy, isPointInAnyUnitCell, renderCursorSprite, handleGlobalClick, tryPlaceUnitOnWall, getSelectionState, handleArmyMouseMove, handleArmyClick, getSwordsmanPlusButtonX, getBowmanPlusButtonX, getMonkPlusButtonX, selectUpgrade, clearUpgradeSelection } from '../utils/controlsUtils'
 import { isPointInRect } from '../utils/tooltipUtils'
 import { SWORDSMAN_CELL_Y, BOWMAN_CELL_Y, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE } from '../config/gameConfig'
 import { restartGame } from '../utils/gameResetUtils'
 import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex, renderUnitHealthNumbers, clearAllWallUnits } from '../utils/wallExtensions'
-import { renderInventory } from '../utils/inventoryUtils'
+import { renderInventory, isPointInUpgradeButton } from '../utils/inventoryUtils'
+import { getCollectedDiamondCount, spendDiamond } from '../utils/diamondUtils'
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
@@ -29,14 +30,14 @@ const GameCanvas: React.FC = () => {
   const [_mousePos, setMousePos] = useState({ x: 0, y: 0 }) // Throttled mouse position (not directly used)
   const [statsEnabled, setStatsEnabled] = useState(true) // Stats are enabled by default
 
-  // Create stats button (positioned in controls section)
+    // Create stats button (positioned in controls section)
   const statsButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
       80, // Below the controls title  
       140, // width
-      50,  // height
-'Hide Stats'
+      42,  // height (reduced from 50 to 42 - thinner)
+      'Hide Stats'
     )
   )
   
@@ -44,9 +45,9 @@ const GameCanvas: React.FC = () => {
   const restartButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
-      150, // Below the stats button (80 + 50 + 20 margin)
+      142, // Below the stats button (80 + 42 + 20 margin)
       140, // width
-      50,  // height
+      42,  // height (reduced from 50 to 42 - thinner)
       'Restart'
     )
   )
@@ -55,9 +56,9 @@ const GameCanvas: React.FC = () => {
   const skipTurnButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
-      220, // Below the restart button (150 + 50 + 20 margin)
+      204, // Below the restart button (142 + 42 + 20 margin)
       140, // width
-      50,  // height
+      42,  // height (reduced from 50 to 42 - thinner)
       'Skip Turn'
     )
   )
@@ -66,9 +67,9 @@ const GameCanvas: React.FC = () => {
   const clearWallsButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
-      290, // Below the skip turn button (220 + 50 + 20 margin)
+      266, // Below the skip turn button (204 + 42 + 20 margin)
       140, // width
-      50,  // height
+      42,  // height (reduced from 50 to 42 - thinner)
       'Clear Walls'
     )
   )
@@ -117,8 +118,8 @@ const GameCanvas: React.FC = () => {
     // Render controls section
     renderControls(ctx)
 
-    // Render inventory section
-    renderInventory(ctx)
+    // Render inventory section with mouse position for upgrade button
+    renderInventory(ctx, mousePositionRef.current.x, mousePositionRef.current.y)
 
     // Render canvas buttons
     drawPixelButton(ctx, statsButton.current)
@@ -178,22 +179,24 @@ const GameCanvas: React.FC = () => {
     // Load font and preload images
     Promise.all([
       loadGameFont(),
-      preloadImages([
-        getImagePath('swordsman.png'),
-        getImagePath('bowman.png'),
-        getImagePath('arrow.png'), // Preload arrow for projectiles
-        getImagePath('skull.png'), // Preload skull enemy
-        getImagePath('slime.png'), // Preload slime enemy
-        getImagePath('lich.png'),  // Preload lich enemy
-        getImagePath('ogre.png'),  // Preload ogre enemy
-        getImagePath('skeleton.png'), // Preload skeleton enemy (no natural spawning)
-        getImagePath('serpent.png'), // Preload serpent enemy
-        getImagePath('coin.png'), // Preload coin for rewards
-        getImagePath('slash.png'), // Preload slash effect for melee attacks
-        getImagePath('diamond.png'), // Preload diamond for rewards
-        getImagePath('monk.png'), // Preload monk ally unit
-        getImagePath('spider.png') // Preload spider enemy unit
-      ])
+          preloadImages([
+      getImagePath('swordsman.png'),
+      getImagePath('bowman.png'),
+      getImagePath('arrow.png'), // Preload arrow for projectiles
+      getImagePath('skull.png'), // Preload skull enemy
+      getImagePath('slime.png'), // Preload slime enemy
+      getImagePath('lich.png'),  // Preload lich enemy
+      getImagePath('ogre.png'),  // Preload ogre enemy
+      getImagePath('skeleton.png'), // Preload skeleton enemy (no natural spawning)
+      getImagePath('serpent.png'), // Preload serpent enemy
+      getImagePath('coin.png'), // Preload coin for rewards
+      getImagePath('slash.png'), // Preload slash effect for melee attacks
+      getImagePath('claws.png'), // Preload claws effect for enemy attacks
+      getImagePath('diamond.png'), // Preload diamond for rewards
+      getImagePath('upgrade.png'), // Preload upgrade button icon
+      getImagePath('monk.png'), // Preload monk ally unit
+      getImagePath('spider.png') // Preload spider enemy unit
+    ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {
         console.error('Failed to load font or images:', error)
@@ -286,18 +289,21 @@ const GameCanvas: React.FC = () => {
     const overUnit = isPointInAnyUnitCell(canvasCoords.x, canvasCoords.y)
     const selectionState = getSelectionState()
     
-    // Check if hovering over plus buttons for pointer cursor (only when enabled)
-    const overPlusButton = !selectionState.isUnitSelected && (
+    // Check if hovering over plus buttons for pointer cursor (only when enabled)  
+    const overPlusButton = !selectionState.isAnySelected && (
       isPointInRect(canvasCoords.x, canvasCoords.y, getSwordsmanPlusButtonX(), SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE) ||
       isPointInRect(canvasCoords.x, canvasCoords.y, getBowmanPlusButtonX(), BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE) ||
       isPointInRect(canvasCoords.x, canvasCoords.y, getMonkPlusButtonX(), MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
     )
     
+    // Check if hovering over upgrade button
+    const overUpgradeButton = isPointInUpgradeButton(canvasCoords.x, canvasCoords.y)
+    
     // Set appropriate cursor
-    if (selectionState.isUnitSelected) {
+    if (selectionState.isUnitSelected || selectionState.isUpgradeSelected) {
       canvas.style.cursor = 'none' // Hide cursor when showing sprite
     } else {
-      canvas.style.cursor = (overButton || overWall || overUnit || overPlusButton) ? 'pointer' : 'default'
+      canvas.style.cursor = (overButton || overWall || overUnit || overPlusButton || overUpgradeButton) ? 'pointer' : 'default'
     }
     
     // Request re-render if any button hover state changed
@@ -350,6 +356,23 @@ const GameCanvas: React.FC = () => {
     if (handleArmyClick(canvasCoords.x, canvasCoords.y, renderGame)) {
       return
     }
+    
+          // Handle upgrade button click
+      if (isPointInUpgradeButton(canvasCoords.x, canvasCoords.y)) {
+        const diamondCount = getCollectedDiamondCount()
+        if (diamondCount > 0) {
+          const selectionState = getSelectionState()
+          if (!selectionState.isUpgradeSelected) {
+            selectUpgrade()
+            console.log('🔧 Upgrade selected - click on a wall unit to upgrade')
+          } else {
+            clearUpgradeSelection()
+            console.log('🔧 Upgrade deselected')
+          }
+          renderGame()
+        }
+        return
+      }
 
     // Check if unit is selected for placement
     const selectionState = getSelectionState()
@@ -381,6 +404,48 @@ const GameCanvas: React.FC = () => {
 
       // Always handle global click (deselect unit)
       handleGlobalClick(canvasCoords.x, canvasCoords.y, renderGame)
+      return
+    }
+    
+    // Check if upgrade is selected
+    if (selectionState.isUpgradeSelected) {
+      // Try to apply upgrade to wall unit
+      let upgraded = false
+      
+      // Check left wall
+      const leftCellIndex = getLeftWallCellIndex(canvasCoords.x, canvasCoords.y)
+      if (leftCellIndex >= 0 && isWallCellOccupied('left', leftCellIndex)) {
+        upgraded = true
+        console.log('🔧 Upgrade applied to left wall unit - functionality coming soon!')
+      }
+      
+      // Check right wall if not upgraded
+      if (!upgraded) {
+        const rightCellIndex = getRightWallCellIndex(canvasCoords.x, canvasCoords.y)
+        if (rightCellIndex >= 0 && isWallCellOccupied('right', rightCellIndex)) {
+          upgraded = true
+          console.log('🔧 Upgrade applied to right wall unit - functionality coming soon!')
+        }
+      }
+      
+      // Check bottom wall if not upgraded
+      if (!upgraded) {
+        const bottomCellIndex = getBottomWallCellIndex(canvasCoords.x, canvasCoords.y)
+        if (bottomCellIndex >= 0 && isWallCellOccupied('bottom', bottomCellIndex)) {
+          upgraded = true
+          console.log('🔧 Upgrade applied to bottom wall unit - functionality coming soon!')
+        }
+      }
+      
+      // Always clear upgrade selection after clicking (whether applied or cancelled)
+      clearUpgradeSelection()
+      if (upgraded) {
+        spendDiamond() // Cost 1 diamond
+      } else {
+        console.log('🔧 Upgrade cancelled - clicked on empty area')
+      }
+      
+      renderGame()
       return
     }
   }, [scale, renderGame])

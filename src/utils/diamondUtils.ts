@@ -201,3 +201,14 @@ export const resetDiamondCount = (): void => {
   collectedDiamonds = 0
   clearDiamonds()
 }
+
+/**
+ * Spend (subtract) one diamond from inventory
+ */
+export const spendDiamond = (): boolean => {
+  if (collectedDiamonds > 0) {
+    collectedDiamonds--
+    return true
+  }
+  return false
+}

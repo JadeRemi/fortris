@@ -1,5 +1,6 @@
 import { renderText } from './fontUtils'
 import { drawImage, getCachedImage } from './imageUtils'
+import { getImagePath } from './assetUtils'
 import {
   CONTROLS_X, CONTROLS_Y, CONTROLS_WIDTH, 
   ARMY_X, ARMY_Y, ARMY_WIDTH,
@@ -21,10 +22,11 @@ interface ArmyUnitState {
   count: number
 }
 
-// Global selection state for unit placement
+// Global selection state for unit placement and upgrades
 interface GlobalSelectionState {
-  isUnitSelected: boolean
-  selectedUnitType: string | null
+  isAnySelected: boolean
+  selectedType: 'unit' | 'upgrade' | null
+  selectedUnitType: string | null // for units
   cursorSprite: HTMLImageElement | null
 }
 
@@ -47,7 +49,8 @@ export let monkState: ArmyUnitState = {
 }
 
 export let globalSelection: GlobalSelectionState = {
-  isUnitSelected: false,
+  isAnySelected: false,
+  selectedType: null,
   selectedUnitType: null,
   cursorSprite: null
 }
@@ -232,6 +235,8 @@ const drawSelectionAnimation = (ctx: CanvasRenderingContext2D, x: number, y: num
     selectionStartTime = swordsmanState.selectionStartTime
   } else if (bowmanState.isSelected) {
     selectionStartTime = bowmanState.selectionStartTime
+  } else if (monkState.isSelected) {
+    selectionStartTime = monkState.selectionStartTime
   } else {
     return // No unit selected
   }
@@ -349,18 +354,26 @@ const drawRoundedSquareSegment = (ctx: CanvasRenderingContext2D, x: number, y: n
 }
 
 /**
- * Render cursor sprite when unit is selected
+ * Render cursor sprite when unit or upgrade is selected
  */
 export const renderCursorSprite = (ctx: CanvasRenderingContext2D, mouseX: number, mouseY: number) => {
-  if (globalSelection.isUnitSelected && globalSelection.cursorSprite && globalSelection.selectedUnitType) {
+  if (globalSelection.cursorSprite && (globalSelection.selectedType === 'unit' || globalSelection.selectedType === 'upgrade')) {
     ctx.save()
     
-    // Get unit type for sprite scaling
-    const unitType = getUnitById(globalSelection.selectedUnitType)
-    const spriteScale = unitType?.spriteScale || 1.0
+    let spriteScale = 1.0
+    let baseSpriteSize = 32 // Smaller than cell size
+    
+    if (globalSelection.selectedType === 'unit' && globalSelection.selectedUnitType) {
+      // Get unit type for sprite scaling
+      const unitType = getUnitById(globalSelection.selectedUnitType)
+      spriteScale = unitType?.spriteScale || 1.0
+    } else if (globalSelection.selectedType === 'upgrade') {
+      // Upgrade sprite uses default scale and slightly smaller size
+      spriteScale = 0.8
+      baseSpriteSize = 24
+    }
     
     // Make sprite smaller and semi-transparent with scaling
-    const baseSpriteSize = 32 // Smaller than cell size
     const scaledSpriteSize = baseSpriteSize * spriteScale
     const spriteX = mouseX - scaledSpriteSize / 2
     const spriteY = mouseY - scaledSpriteSize / 2
@@ -377,7 +390,7 @@ export const renderCursorSprite = (ctx: CanvasRenderingContext2D, mouseX: number
  */
 export const handleGlobalClick = (_x: number, _y: number, renderCallback: () => void): boolean => {
   // If no unit is selected, nothing to do
-  if (!globalSelection.isUnitSelected) {
+  if (globalSelection.selectedType !== 'unit') {
     return false
   }
   
@@ -385,7 +398,8 @@ export const handleGlobalClick = (_x: number, _y: number, renderCallback: () => 
   swordsmanState.isSelected = false
   bowmanState.isSelected = false
   monkState.isSelected = false
-  globalSelection.isUnitSelected = false
+  globalSelection.isAnySelected = false
+  globalSelection.selectedType = null
   globalSelection.selectedUnitType = null
   globalSelection.cursorSprite = null
   stopSelectionAnimation()
@@ -399,7 +413,7 @@ export const handleGlobalClick = (_x: number, _y: number, renderCallback: () => 
  */
 export const tryPlaceUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): boolean => {
   // Check if unit is selected
-  if (!globalSelection.isUnitSelected || !globalSelection.selectedUnitType) {
+  if (globalSelection.selectedType !== 'unit' || !globalSelection.selectedUnitType) {
     return false
   }
   
@@ -436,8 +450,15 @@ export const tryPlaceUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIn
  * Get current selection state for external components
  */
 export const getSelectionState = () => ({
-  isUnitSelected: globalSelection.isUnitSelected,
+  isUnitSelected: globalSelection.selectedType === 'unit',
+  isUpgradeSelected: globalSelection.selectedType === 'upgrade', 
+  isAnySelected: globalSelection.isAnySelected,
+  selectedType: globalSelection.selectedType,
   selectedUnitType: globalSelection.selectedUnitType,
+  cursorSprite: globalSelection.cursorSprite,
+  swordsmanSelected: swordsmanState.isSelected,
+  bowmanSelected: bowmanState.isSelected,
+  monkSelected: monkState.isSelected,
   swordsmanCount: swordsmanState.count,
   bowmanCount: bowmanState.count
 })
@@ -490,12 +511,14 @@ export const handleSwordsmanClick = (x: number, y: number, renderCallback: () =>
     
     // Update global selection state
     if (swordsmanState.isSelected) {
-      globalSelection.isUnitSelected = true
+      globalSelection.isAnySelected = true
+      globalSelection.selectedType = 'unit'
       globalSelection.selectedUnitType = ALLY_UNITS.SWORDSMAN.id
       globalSelection.cursorSprite = getCachedImage(ALLY_UNITS.SWORDSMAN.imagePath) || null
       startSelectionAnimation(renderCallback)
     } else {
-      globalSelection.isUnitSelected = false
+      globalSelection.isAnySelected = false
+      globalSelection.selectedType = null
       globalSelection.selectedUnitType = null
       globalSelection.cursorSprite = null
       stopSelectionAnimation()
@@ -535,12 +558,14 @@ export const handleBowmanClick = (x: number, y: number, renderCallback: () => vo
     
     // Update global selection state
     if (bowmanState.isSelected) {
-      globalSelection.isUnitSelected = true
+      globalSelection.isAnySelected = true
+      globalSelection.selectedType = 'unit'
       globalSelection.selectedUnitType = ALLY_UNITS.BOWMAN.id
       globalSelection.cursorSprite = getCachedImage(ALLY_UNITS.BOWMAN.imagePath) || null
       startSelectionAnimation(renderCallback)
     } else {
-      globalSelection.isUnitSelected = false
+      globalSelection.isAnySelected = false
+      globalSelection.selectedType = null
       globalSelection.selectedUnitType = null
       globalSelection.cursorSprite = null
       stopSelectionAnimation()
@@ -638,9 +663,9 @@ const renderSwordsmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number
   const cellY = SWORDSMAN_CELL_Y
   const cellSize = ARMY_UNIT_CELL_SIZE
   
-  // Check if any unit is currently selected for placement
+  // Check if any unit or upgrade is currently selected
   const selectionState = getSelectionState()
-  const isDisabled = selectionState.isUnitSelected
+  const isDisabled = selectionState.isAnySelected
   
   // Check if mouse is hovering over this button
   const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
@@ -696,9 +721,9 @@ const renderBowmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 
   const cellY = BOWMAN_CELL_Y
   const cellSize = ARMY_UNIT_CELL_SIZE
   
-  // Check if any unit is currently selected for placement
+  // Check if any unit or upgrade is currently selected
   const selectionState = getSelectionState()
-  const isDisabled = selectionState.isUnitSelected
+  const isDisabled = selectionState.isAnySelected
   
   // Check if mouse is hovering over this button
   const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
@@ -797,9 +822,9 @@ const renderMonkPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 0,
   const cellY = MONK_CELL_Y
   const cellSize = ARMY_UNIT_CELL_SIZE
   
-  // Check if any unit is currently selected for placement
+  // Check if any unit or upgrade is currently selected
   const selectionState = getSelectionState()
-  const isDisabled = selectionState.isUnitSelected
+  const isDisabled = selectionState.isAnySelected
   
   // Check if mouse is hovering over this button
   const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
@@ -878,12 +903,14 @@ const handleMonkClick = (x: number, y: number, renderCallback: () => void) => {
     
     // Update global selection state
     if (monkState.isSelected) {
-      globalSelection.isUnitSelected = true
+      globalSelection.isAnySelected = true
+      globalSelection.selectedType = 'unit'
       globalSelection.selectedUnitType = ALLY_UNITS.MONK.id
       globalSelection.cursorSprite = getCachedImage(ALLY_UNITS.MONK.imagePath) || null
       startSelectionAnimation(renderCallback)
     } else {
-      globalSelection.isUnitSelected = false
+      globalSelection.isAnySelected = false
+      globalSelection.selectedType = null
       globalSelection.selectedUnitType = null
       globalSelection.cursorSprite = null
       stopSelectionAnimation()
@@ -900,9 +927,9 @@ const handleMonkClick = (x: number, y: number, renderCallback: () => void) => {
  * Handle Monk plus button click
  */
 const handleMonkPlusClick = (renderCallback?: () => void) => {
-  // Check if any unit is currently selected for placement (disable when disabled)
+  // Check if any selection is active (disable when disabled)
   const selectionState = getSelectionState()
-  if (selectionState.isUnitSelected) {
+  if (selectionState.isAnySelected) {
     return // Ignore click when disabled
   }
 
@@ -919,9 +946,9 @@ const handleMonkPlusClick = (renderCallback?: () => void) => {
  * Handle Swordsman plus button click
  */
 const handleSwordsmanPlusClick = (renderCallback?: () => void) => {
-  // Don't allow purchasing while a unit is selected for placement
+  // Don't allow purchasing while any selection is active
   const selectionState = getSelectionState()
-  if (selectionState.isUnitSelected) {
+  if (selectionState.isAnySelected) {
     return // Ignore click when disabled
   }
   
@@ -933,9 +960,9 @@ const handleSwordsmanPlusClick = (renderCallback?: () => void) => {
  * Handle Bowman plus button click
  */
 const handleBowmanPlusClick = (renderCallback?: () => void) => {
-  // Don't allow purchasing while a unit is selected for placement
+  // Don't allow purchasing while any selection is active
   const selectionState = getSelectionState()
-  if (selectionState.isUnitSelected) {
+  if (selectionState.isAnySelected) {
     return // Ignore click when disabled
   }
   
@@ -1053,4 +1080,106 @@ export const handleArmyClick = (x: number, y: number, renderCallback?: () => voi
   }
   
   return false
+}
+
+/**
+ * Clear all selections (internal function)
+ */
+const clearSelection = () => {
+  swordsmanState.isSelected = false
+  bowmanState.isSelected = false
+  monkState.isSelected = false
+  upgradeSelectionState.isSelected = false
+  upgradeSelectionState.selectionStartTime = 0
+  globalSelection.isAnySelected = false
+  globalSelection.selectedType = null
+  globalSelection.selectedUnitType = null
+  globalSelection.cursorSprite = null
+}
+
+// Upgrade selection state  
+interface UpgradeSelectionState {
+  isSelected: boolean
+  selectionStartTime: number
+}
+
+let upgradeSelectionState: UpgradeSelectionState = {
+  isSelected: false,
+  selectionStartTime: 0
+}
+
+/**
+ * Select upgrade for application
+ */
+export const selectUpgrade = () => {
+  clearSelection() // Clear any existing selection
+  upgradeSelectionState.isSelected = true
+  upgradeSelectionState.selectionStartTime = Date.now()
+  globalSelection.isAnySelected = true
+  globalSelection.selectedType = 'upgrade'
+  // Set cursor sprite to upgrade icon
+  try {
+    globalSelection.cursorSprite = getCachedImage(getImagePath('upgrade.png')) || null
+  } catch {
+    globalSelection.cursorSprite = null
+  }
+}
+
+/**
+ * Check if upgrade is currently selected
+ */
+export const isUpgradeSelected = (): boolean => {
+  return globalSelection.selectedType === 'upgrade'
+}
+
+/**
+ * Clear upgrade selection
+ */
+export const clearUpgradeSelection = () => {
+  if (globalSelection.selectedType === 'upgrade') {
+    upgradeSelectionState.isSelected = false
+    upgradeSelectionState.selectionStartTime = 0
+    clearSelection()
+  }
+}
+
+/**
+ * Draw upgrade selection animation (similar to unit selection)
+ */
+export const drawUpgradeSelectionAnimation = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
+  if (!upgradeSelectionState.isSelected) return
+  
+  const currentTime = Date.now()
+  const elapsedTime = (currentTime - upgradeSelectionState.selectionStartTime) % 6000 // 6 second cycle (same as units)
+  const progress = elapsedTime / 6000 // 0 to 1
+  
+  ctx.save()
+  ctx.strokeStyle = '#4CAF50' // Same green as wall hover and unit selection
+  ctx.lineWidth = 3
+  
+  const borderOffset = 2 // Distance outside the cell
+  const squareX = x - borderOffset
+  const squareY = y - borderOffset  
+  const squareSize = size + (borderOffset * 2)
+  const cornerRadius = 6 // Slightly rounded corners
+  
+  // Create spinning gradient effect by drawing segments with varying opacity (same as units)
+  const segments = 8
+  const segmentLength = squareSize * 4 / segments // Perimeter divided by segments
+  const rotationOffset = progress * (squareSize * 4) // Full rotation around perimeter
+  
+  for (let i = 0; i < segments; i++) {
+    const segmentStart = (i * segmentLength + rotationOffset) % (squareSize * 4)
+    const segmentEnd = segmentStart + (segmentLength * 0.7) // Gaps between segments
+    
+    // Synchronized gradient rotation - rotates with the same speed as border scroll
+    const gradientRotation = progress * Math.PI * 2 // Same rotation speed as border scroll
+    const opacity = 0.3 + 0.7 * Math.sin((i / segments) * Math.PI * 2 + gradientRotation)
+    ctx.globalAlpha = Math.max(0.2, opacity)
+    
+    // Draw rounded segment on the square perimeter
+    drawRoundedSquareSegment(ctx, squareX, squareY, squareSize, cornerRadius, segmentStart, segmentEnd)
+  }
+  
+  ctx.restore()
 }

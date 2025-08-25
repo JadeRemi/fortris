@@ -11,7 +11,7 @@ export const TICK_RATE = 1000 / TARGET_FPS // ~16.67ms per frame
 // Level dimensions
 export const LEVEL_WIDTH = 12  // Main battlefield width in cells
 export const LEVEL_HEIGHT = 12 // Main battlefield height in cells (visible)
-export const LEVEL_NEGATIVE_ROWS = 2 // Number of negative rows above battlefield (for enemy spawning)
+export const LEVEL_NEGATIVE_ROWS = 4 // Number of negative rows above battlefield (for enemy spawning) - supports up to 5x5 enemies
 
 // Battlefield settings
 export const BATTLEFIELD_ROWS = LEVEL_HEIGHT
@@ -113,6 +113,9 @@ export const HIT_ANIMATION_DURATION_MS = 800 // 0.8 seconds red hit animation (f
 export const PROJECTILE_LIFESPAN_MS = 5000 // 5 seconds arrow lifespan
 export const PROJECTILE_SPEED = 400 // pixels per second (2x faster)
 export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
+
+// Healing configuration
+export const MONK_HEALING_AMOUNT = 2 // Amount of health monks restore per heal
 
 // Enemy spawn configuration - independent spawn system
 export const MIN_ENEMY_SPAWNS_PER_TURN = 0 // Minimum enemies that can spawn per turn

@@ -43,14 +43,21 @@ export const spawnDamageNumber = (enemy: Enemy, damage: number): void => {
   const startX = coords.x + (enemy.type.width * 40) / 2 // Center of enemy
   const startY = coords.y - 10 // Above the enemy
   
+  spawnDamageNumberAtPosition(startX, startY, damage)
+}
+
+/**
+ * Spawn a flying damage number at specific canvas coordinates
+ */
+export const spawnDamageNumberAtPosition = (x: number, y: number, damage: number): void => {
   const damageNumber: DamageNumber = {
     id: `damage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     uuid: generateUUID(),
     damage,
-    startX,
-    startY,
-    currentX: startX,
-    currentY: startY,
+    startX: x,
+    startY: y,
+    currentX: x,
+    currentY: y,
     startTime: Date.now(),
     duration: DAMAGE_NUMBER_DURATION_MS,
     isActive: true
@@ -111,23 +118,52 @@ export const renderDamageNumbers = (ctx: CanvasRenderingContext2D): void => {
       opacity = 1.0 - fadeProgress
     }
     
-    // Draw damage number
+    // Determine if this is a healing number (positive damage means healing)
+    const isHealing = damageNumber.id.includes('healing_')
+    
+    // Draw damage/healing number
     ctx.save()
-    ctx.fillStyle = `rgba(220, 20, 20, ${opacity})` // Brighter red color
-    ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})` // Black outline
+    if (isHealing) {
+      ctx.fillStyle = `rgba(0, 220, 0, ${opacity})` // Bright green for healing
+      ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})` // Black outline
+    } else {
+      ctx.fillStyle = `rgba(220, 20, 20, ${opacity})` // Bright red for damage
+      ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})` // Black outline
+    }
+    
     ctx.lineWidth = 2
     ctx.font = `${UI_FONT_SIZE_HEALTH}px "Pixelify Sans", monospace`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     
-    const damageText = `-${damageNumber.damage}`
+    const numberText = isHealing ? `+${damageNumber.damage}` : `-${damageNumber.damage}`
     
     // Draw text with outline
-    ctx.strokeText(damageText, damageNumber.currentX, damageNumber.currentY)
-    ctx.fillText(damageText, damageNumber.currentX, damageNumber.currentY)
+    ctx.strokeText(numberText, damageNumber.currentX, damageNumber.currentY)
+    ctx.fillText(numberText, damageNumber.currentX, damageNumber.currentY)
     
     ctx.restore()
   })
+}
+
+/**
+ * Spawn a green healing number at specific canvas coordinates
+ */
+export const spawnHealingNumber = (x: number, y: number, healAmount: number): void => {
+  const healingNumber: DamageNumber = {
+    id: `healing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    uuid: generateUUID(),
+    damage: healAmount, // Use damage field for heal amount
+    startX: x,
+    startY: y,
+    currentX: x,
+    currentY: y,
+    startTime: Date.now(),
+    duration: DAMAGE_NUMBER_DURATION_MS,
+    isActive: true
+  }
+  
+  damageNumbers.push(healingNumber)
 }
 
 /**

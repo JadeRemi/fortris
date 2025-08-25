@@ -1,6 +1,6 @@
 import { renderText } from './fontUtils'
 import { CONTROLS_X, CONTROLS_Y } from '../config/gameConfig'
-import { TEXT_PRIMARY } from '../config/palette'
+import { TEXT_PRIMARY, BATTLEFIELD_CELL_EMPTY, BATTLEFIELD_CELL_BORDER } from '../config/palette'
 
 export interface CanvasButton {
   x: number
@@ -22,11 +22,11 @@ export const drawPixelButton = (ctx: CanvasRenderingContext2D, button: CanvasBut
   const x = CONTROLS_X + relativeX
   const y = CONTROLS_Y + relativeY
   
-  // Choose colors based on state (brown button, darker and more pale)
-  const borderColor = '#4a2c17' // Darker brown border
-  const bgColor = isPressed ? '#5d2f09' : (isHovered ? '#7a4a2e' : '#663300') // Brown shades
-  const shadowColor = '#3d1f06' // Dark brown shadow
-  const highlightColor = isHovered ? '#8b7355' : '#6b5b47' // More pale, darker highlight
+  // Use same colors as Walls cells
+  const borderColor = BATTLEFIELD_CELL_BORDER // Same as wall cell border
+  const bgColor = isPressed ? '#1f1810' : (isHovered ? '#3a2d20' : BATTLEFIELD_CELL_EMPTY) // Wall cell background with pressed/hover variants
+  const shadowColor = '#1a1209' // Darker shadow
+  const highlightColor = isHovered ? '#5a4635' : BATTLEFIELD_CELL_BORDER // Subtle highlight
   
   // Save context
   ctx.save()

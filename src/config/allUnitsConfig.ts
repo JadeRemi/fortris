@@ -47,7 +47,7 @@ export const ALLY_UNITS: Record<string, AllyUnitType> = {
     imagePath: getImagePath('swordsman.png'),
     assetWidth: 128,
     assetHeight: 128,
-    maxHealth: 10,
+    maxHealth: 40,
     damage: 2,
     tier: 1, // Tier 1 unit
     description: 'Small melee unit - takes 1x1 cell'
@@ -61,7 +61,7 @@ export const ALLY_UNITS: Record<string, AllyUnitType> = {
     imagePath: getImagePath('bowman.png'),
     assetWidth: 128,
     assetHeight: 128,
-    maxHealth: 10,
+    maxHealth: 20,
     damage: 1,
     tier: 1, // Tier 1 unit
     description: 'Small ranged unit - takes 1x1 cell'
@@ -75,7 +75,7 @@ export const ALLY_UNITS: Record<string, AllyUnitType> = {
     imagePath: getImagePath('monk.png'),
     assetWidth: 128,
     assetHeight: 128,
-    maxHealth: 10,
+    maxHealth: 20,
     damage: 1,
     spriteScale: 1.0,
     tier: 1, // Tier 1 unit
@@ -228,8 +228,5 @@ export const getAnyUnitById = (id: string): AllyUnitType | EnemyUnitType | undef
  * Get all naturally spawning enemy units (spawn chance > 0)
  */
 export const getSpawnableEnemyUnits = (): EnemyUnitType[] => {
-  const spawnable = Object.values(ENEMY_UNITS).filter(unit => unit.spawnChance > 0)
-  console.log('🔍 All enemy units:', Object.values(ENEMY_UNITS).map(u => `${u.name} (${u.spawnChance})`))
-  console.log('🎯 Spawnable enemy units:', spawnable.map(u => `${u.name} (${u.spawnChance})`))
-  return spawnable
+  return Object.values(ENEMY_UNITS).filter(unit => unit.spawnChance > 0)
 }

@@ -241,16 +241,16 @@ export const renderWalls = (ctx: CanvasRenderingContext2D) => {
 }
 
 /**
- * Handle wall cell hover - only shows effects when unit is selected and cell is unoccupied
+ * Handle wall cell hover - shows effects when unit is selected (unoccupied cells) or upgrade is selected (occupied cells)
  */
 export const handleWallHover = (x: number, y: number, _renderCallback: () => void) => {
   
   // Clear all current hover states
   wallHoverStates.forEach(state => state.isHovered = false)
   
-  // Only show hover effects when a unit is selected from ARMY
+  // Show hover effects when a unit is selected from ARMY or when upgrade is selected
   const selectionState = getSelectionState()
-  if (!selectionState.isUnitSelected) {
+  if (!selectionState.isUnitSelected && !selectionState.isUpgradeSelected) {
     return
   }
   
@@ -258,8 +258,12 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
   if (isInLeftWall(x, y)) {
     const cellIndex = getLeftWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      // Only show hover effect if cell is unoccupied
-      if (!isWallCellOccupied('left', cellIndex)) {
+      // Show hover effect based on selection type:
+      // - Unit selected: only unoccupied cells
+      // - Upgrade selected: only occupied cells
+      const isOccupied = isWallCellOccupied('left', cellIndex)
+      const shouldShowHover = selectionState.isUnitSelected ? !isOccupied : isOccupied
+      if (shouldShowHover) {
         let hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === cellIndex)
         if (!hoverState) {
           hoverState = { 
@@ -286,8 +290,12 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
   if (isInRightWall(x, y)) {
     const cellIndex = getRightWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      // Only show hover effect if cell is unoccupied
-      if (!isWallCellOccupied('right', cellIndex)) {
+      // Show hover effect based on selection type:
+      // - Unit selected: only unoccupied cells
+      // - Upgrade selected: only occupied cells
+      const isOccupied = isWallCellOccupied('right', cellIndex)
+      const shouldShowHover = selectionState.isUnitSelected ? !isOccupied : isOccupied
+      if (shouldShowHover) {
         let hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === cellIndex)
         if (!hoverState) {
           hoverState = { 
@@ -314,8 +322,12 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
   if (isInBottomWall(x, y)) {
     const cellIndex = getBottomWallCellIndex(x, y)
     if (cellIndex !== -1) {
-      // Only show hover effect if cell is unoccupied
-      if (!isWallCellOccupied('bottom', cellIndex)) {
+      // Show hover effect based on selection type:
+      // - Unit selected: only unoccupied cells
+      // - Upgrade selected: only occupied cells
+      const isOccupied = isWallCellOccupied('bottom', cellIndex)
+      const shouldShowHover = selectionState.isUnitSelected ? !isOccupied : isOccupied
+      if (shouldShowHover) {
         let hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === cellIndex)
         if (!hoverState) {
           hoverState = { 

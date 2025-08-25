@@ -7,15 +7,16 @@ import { getCollectedCoinCount } from './coinUtils'
 import { getCollectedDiamondCount } from './diamondUtils'
 import { getImagePath } from './assetUtils'
 import { renderText } from './fontUtils'
+import { getSelectionState, drawUpgradeSelectionAnimation } from './controlsUtils'
 import {
   INVENTORY_X, INVENTORY_Y, INVENTORY_WIDTH, INVENTORY_HEIGHT
 } from '../config/gameConfig'
-import { TEXT_PRIMARY } from '../config/palette'
+import { TEXT_PRIMARY, BATTLEFIELD_CELL_EMPTY, BATTLEFIELD_CELL_BORDER } from '../config/palette'
 
 /**
  * Render the inventory section
  */
-export const renderInventory = (ctx: CanvasRenderingContext2D) => {
+export const renderInventory = (ctx: CanvasRenderingContext2D, mouseX: number = 0, mouseY: number = 0) => {
   // Draw inventory section border - matching other sections exactly
   ctx.save()
   ctx.strokeStyle = '#666666'
@@ -37,8 +38,13 @@ export const renderInventory = (ctx: CanvasRenderingContext2D) => {
   // Render coin row
   renderCoinRow(ctx)
   
-  // Render diamond row (placeholder for future)
+  // Render diamond row
   renderDiamondRow(ctx)
+  
+  // Update canvas cursor for upgrade button
+  if (isPointInUpgradeButton(mouseX, mouseY)) {
+    // This will be handled by the parent component to set cursor style
+  }
 }
 
 /**
@@ -124,4 +130,96 @@ const renderDiamondRow = (ctx: CanvasRenderingContext2D) => {
   ctx.textBaseline = 'middle'
   ctx.fillText(diamondCount.toString(), iconX + iconSize + 10, iconY + iconSize/2)
   ctx.restore()
+  
+  // Draw upgrade button if diamonds > 0
+  if (diamondCount > 0) {
+    renderUpgradeButton(ctx, rowY)
+  }
+}
+
+/**
+ * Render upgrade button at the right edge of inventory
+ */
+const renderUpgradeButton = (ctx: CanvasRenderingContext2D, rowY: number) => {
+  const buttonSize = 32 // Increased for better rectangular button
+  const gap = 8 // Small gap from right edge
+  const buttonX = INVENTORY_X + INVENTORY_WIDTH - buttonSize - gap
+  const buttonY = rowY + 2 // Centered better with diamond row
+  
+  ctx.save()
+  
+  // Draw rectangular background with border-radius
+  const borderRadius = 4
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.strokeStyle = BATTLEFIELD_CELL_BORDER
+  ctx.lineWidth = 2
+  
+  // Draw rounded rectangle background
+  ctx.beginPath()
+  ctx.moveTo(buttonX + borderRadius, buttonY)
+  ctx.arcTo(buttonX + buttonSize, buttonY, buttonX + buttonSize, buttonY + buttonSize, borderRadius)
+  ctx.arcTo(buttonX + buttonSize, buttonY + buttonSize, buttonX, buttonY + buttonSize, borderRadius)
+  ctx.arcTo(buttonX, buttonY + buttonSize, buttonX, buttonY, borderRadius)
+  ctx.arcTo(buttonX, buttonY, buttonX + buttonSize, buttonY, borderRadius)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+  
+  // Draw spinning selection animation if upgrade is selected (same as army units)
+  const selectionState = getSelectionState()
+  if (selectionState.isUpgradeSelected) {
+    drawUpgradeSelectionAnimation(ctx, buttonX, buttonY, buttonSize)
+  }
+  
+  // Draw upgrade icon (smaller to fit in button)
+  const iconSize = 18 // Smaller icon to fit in rectangular button
+  const iconX = buttonX + (buttonSize - iconSize) / 2
+  const iconY = buttonY + (buttonSize - iconSize) / 2
+  
+  try {
+    const upgradeImage = getCachedImage(getImagePath('upgrade.png'))
+    if (upgradeImage) {
+      ctx.drawImage(
+        upgradeImage,
+        iconX, iconY, iconSize, iconSize
+      )
+    }
+  } catch (error) {
+    // Fallback: draw a simple arrow up shape if image fails
+    ctx.fillStyle = '#FFD700' // Gold color
+    ctx.beginPath()
+    // Draw simple up arrow
+    const centerX = iconX + iconSize/2
+    const centerY = iconY + iconSize/2
+    ctx.moveTo(centerX, iconY + 2) // top point
+    ctx.lineTo(iconX + 2, centerY) // left point
+    ctx.lineTo(iconX + 6, centerY) // left base
+    ctx.lineTo(iconX + 6, iconY + iconSize - 2) // left bottom
+    ctx.lineTo(iconX + iconSize - 6, iconY + iconSize - 2) // right bottom
+    ctx.lineTo(iconX + iconSize - 6, centerY) // right base
+    ctx.lineTo(iconX + iconSize - 2, centerY) // right point
+    ctx.closePath()
+    ctx.fill()
+  }
+  
+  ctx.restore()
+}
+
+/**
+ * Check if a point is inside the upgrade button
+ */
+export const isPointInUpgradeButton = (x: number, y: number): boolean => {
+  const diamondCount = getCollectedDiamondCount()
+  if (diamondCount <= 0) {
+    return false // Button is not visible
+  }
+  
+  const rowY = INVENTORY_Y + 110 // Same as diamond row
+  const buttonSize = 32 // Increased from 24 for better rectangular button
+  const gap = 8
+  const buttonX = INVENTORY_X + INVENTORY_WIDTH - buttonSize - gap
+  const buttonY = rowY + 2 // Centered better with diamond row
+  
+  return x >= buttonX && x <= buttonX + buttonSize &&
+         y >= buttonY && y <= buttonY + buttonSize
 }

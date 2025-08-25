@@ -24,9 +24,11 @@ import {
   HIT_ANIMATION_DURATION_MS,
   PROJECTILE_LIFESPAN_MS,
   PROJECTILE_SPEED,
-  PROJECTILE_SIZE_RATIO
+  PROJECTILE_SIZE_RATIO,
+  MONK_HEALING_AMOUNT,
+  BATTLEFIELD_CELL_BORDER_WIDTH
 } from '../config/gameConfig'
-import { getWallCell } from './wallExtensions'
+import { getWallCell, leftWallCells, rightWallCells, bottomWallCells } from './wallExtensions'
 import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
 import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder } from './enemyUtils'
@@ -38,7 +40,8 @@ import { addPainEffect, cleanupPainEffects } from './painEffectUtils'
 import { spawnCoin, updateCoins, renderCoins, clearCoins } from './coinUtils'
 import { spawnDiamond, updateDiamonds, renderDiamonds, clearDiamonds } from './diamondUtils'
 import { spawnSlashEffect, updateSlashEffects, renderSlashEffects, clearSlashEffects } from './slashUtils'
-import { spawnDamageNumber, updateDamageNumbers, renderDamageNumbers, clearDamageNumbers } from './damageNumberUtils'
+import { updateClawsEffects, renderClawsEffects, clearClawsEffects } from './clawsUtils'
+import { spawnDamageNumber, spawnHealingNumber, updateDamageNumbers, renderDamageNumbers, clearDamageNumbers } from './damageNumberUtils'
 
 // Combat state management
 interface CombatState {
@@ -181,6 +184,7 @@ export const stopCombat = () => {
   clearCoins()
   clearDiamonds()
   clearSlashEffects()
+  clearClawsEffects()
   clearDamageNumbers()
 }
 
@@ -198,6 +202,7 @@ export const updateCombat = (deltaTime: number) => {
   updateCoins(deltaTime) // Pass deltaTime for coin movement
   updateDiamonds(deltaTime) // Pass deltaTime for diamond movement
   updateSlashEffects()
+  updateClawsEffects()
   updateDamageNumbers() // Update flying damage numbers
   
   // Cleanup expired pain effects
@@ -251,6 +256,73 @@ export const updateCombat = (deltaTime: number) => {
 }
 
 /**
+ * Check if a melee unit has a valid target to attack
+ */
+const meleeUnitHasTarget = (position: UnitPosition): boolean => {
+  let targetCol: number, targetRow: number
+  
+  switch (position.wallType) {
+    case 'left':
+      targetCol = 0
+      targetRow = position.cellIndex
+      break
+    case 'right':
+      targetCol = LEVEL_WIDTH - 1
+      targetRow = position.cellIndex
+      break
+    case 'bottom':
+      targetCol = position.cellIndex
+      targetRow = LEVEL_HEIGHT - 1
+      break
+  }
+  
+  // Check if there's an enemy in the target cell
+  const targetEnemy = getEnemyAt(targetCol, targetRow)
+  return targetEnemy !== null
+}
+
+/**
+ * Check if a bowman has enemies in their line of fire (any cell in the row/column they're facing)
+ */
+const bowmanHasTarget = (position: UnitPosition): boolean => {
+  switch (position.wallType) {
+    case 'left':
+      // Check entire row (bowman shoots right across the battlefield)
+      for (let col = 0; col < LEVEL_WIDTH; col++) {
+        if (getEnemyAt(col, position.cellIndex) !== null) {
+          return true
+        }
+      }
+      break
+    case 'right':
+      // Check entire row (bowman shoots left across the battlefield)
+      for (let col = 0; col < LEVEL_WIDTH; col++) {
+        if (getEnemyAt(col, position.cellIndex) !== null) {
+          return true
+        }
+      }
+      break
+    case 'bottom':
+      // Check entire column (bowman shoots up across the battlefield)
+      for (let row = 0; row < LEVEL_HEIGHT; row++) {
+        if (getEnemyAt(position.cellIndex, row) !== null) {
+          return true
+        }
+      }
+      break
+  }
+  return false
+}
+
+/**
+ * Check if a monk has injured allies to heal on the same wall
+ */
+const monkHasHealingTarget = (position: UnitPosition): boolean => {
+  const injuredAllies = findInjuredAlliesOnWall(position.wallType)
+  return injuredAllies.length > 0
+}
+
+/**
  * Process the next unit's action
  * @returns true if there are more units to process, false if turn is complete
  */
@@ -260,7 +332,28 @@ const processNextUnitAction = (currentTime: number): boolean => {
     const wallCell = getWallCell(position.wallType, position.cellIndex)
     
     if (wallCell && wallCell.isOccupied && wallCell.occupiedBy) {
-      // Unit found - perform action
+      // Check if this is a unit without a valid target/action
+      if (wallCell.occupiedBy === ALLY_UNITS.SWORDSMAN.id) {
+        if (!meleeUnitHasTarget(position)) {
+          // Melee unit with no target - skip without delay or animation
+          combatState.currentUnitIndex++
+          continue
+        }
+      } else if (wallCell.occupiedBy === ALLY_UNITS.BOWMAN.id) {
+        if (!bowmanHasTarget(position)) {
+          // Bowman with no enemies in line of fire - skip without delay or animation
+          combatState.currentUnitIndex++
+          continue
+        }
+      } else if (wallCell.occupiedBy === ALLY_UNITS.MONK.id) {
+        if (!monkHasHealingTarget(position)) {
+          // Monk with no healing target - skip without delay or animation
+          combatState.currentUnitIndex++
+          continue
+        }
+      }
+      
+      // Unit found with valid action - perform action
       performUnitAction(position, wallCell.occupiedBy, currentTime)
       combatState.currentUnitIndex++
       return true // Action performed, wait for delay
@@ -327,6 +420,9 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
   } else if (unitType === ALLY_UNITS.BOWMAN.id) {
     // Ranged attack: spawn projectile
     performRangedAttack(position, currentTime)
+  } else if (unitType === ALLY_UNITS.MONK.id) {
+    // Healing: find and heal injured allies on the same wall
+    performMonkHealing(position, currentTime)
   }
 }
 
@@ -412,6 +508,157 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
     removeEnemy(targetEnemy)
     // addLogMessage(`${targetEnemy.type.name} is defeated!`) // Removed - not very useful
   }
+}
+
+/**
+ * Perform monk healing on injured allies on the same wall
+ */
+const performMonkHealing = (position: UnitPosition, _currentTime: number) => {
+  // Find injured allies by range priority (closest first)
+  const targetAlly = findClosestInjuredAlly(position)
+  
+  if (!targetAlly) {
+    return // No one to heal
+  }
+  
+  // Heal the ally
+  const currentHealth = targetAlly.wallCell.currentHealth || 0
+  const maxHealth = targetAlly.wallCell.maxHealth || 0
+  const healAmount = Math.min(MONK_HEALING_AMOUNT, maxHealth - currentHealth)
+  
+  if (healAmount > 0) {
+    targetAlly.wallCell.currentHealth = currentHealth + healAmount
+    
+    // Spawn green healing number
+    const wallCoords = getWallCellCoords(targetAlly.wallType, targetAlly.cellIndex)
+    const centerX = wallCoords.x + WALL_CELL_SIZE / 2
+    const centerY = wallCoords.y - 10 // Above the ally
+    spawnHealingNumber(centerX, centerY, healAmount)
+  }
+}
+
+/**
+ * Find the closest injured ally to a monk, prioritizing by range
+ */
+const findClosestInjuredAlly = (monkPosition: UnitPosition) => {
+  // Search by range: 1 cell away first, then 2 cells, etc.
+  for (let range = 1; range <= 12; range++) { // Max 12 cells (full wall length)
+    const injuredAtRange = findInjuredAlliesAtRange(monkPosition, range)
+    if (injuredAtRange.length > 0) {
+      // If multiple allies at same range, pick most injured (lowest health %)
+      let mostInjuredAlly = injuredAtRange[0]
+      let lowestHealthPercent = (mostInjuredAlly.currentHealth || 0) / (mostInjuredAlly.maxHealth || 1)
+      
+      for (const ally of injuredAtRange) {
+        const healthPercent = (ally.currentHealth || 0) / (ally.maxHealth || 1)
+        if (healthPercent < lowestHealthPercent) {
+          mostInjuredAlly = ally
+          lowestHealthPercent = healthPercent
+        }
+      }
+      return mostInjuredAlly
+    }
+  }
+  return null // No injured allies found
+}
+
+/**
+ * Find all injured allies at a specific range from the monk
+ */
+const findInjuredAlliesAtRange = (monkPosition: UnitPosition, range: number) => {
+  const injuredAtRange: Array<{
+    wallType: 'left' | 'right' | 'bottom',
+    cellIndex: number,
+    wallCell: any,
+    currentHealth: number,
+    maxHealth: number
+  }> = []
+  
+  // Get the appropriate wall cells based on wall type
+  let wallCells: any[]
+  let maxCells: number
+  
+  if (monkPosition.wallType === 'left') {
+    wallCells = leftWallCells
+    maxCells = leftWallCells.length
+  } else if (monkPosition.wallType === 'right') {
+    wallCells = rightWallCells
+    maxCells = rightWallCells.length
+  } else {
+    wallCells = bottomWallCells
+    maxCells = bottomWallCells.length
+  }
+  
+  // Check cells at exactly this range
+  const checkIndexes = [
+    monkPosition.cellIndex - range, // Left/above
+    monkPosition.cellIndex + range  // Right/below
+  ]
+  
+  for (const i of checkIndexes) {
+    if (i >= 0 && i < maxCells) {
+      const cell = wallCells[i]
+      if (cell && cell.isOccupied && cell.currentHealth !== undefined && cell.maxHealth !== undefined) {
+        if (cell.currentHealth < cell.maxHealth) {
+          injuredAtRange.push({
+            wallType: monkPosition.wallType,
+            cellIndex: i,
+            wallCell: cell,
+            currentHealth: cell.currentHealth,
+            maxHealth: cell.maxHealth
+          })
+        }
+      }
+    }
+  }
+  
+  return injuredAtRange
+}
+
+/**
+ * Find all injured allies on a specific wall (used by skip logic)
+ */
+const findInjuredAlliesOnWall = (wallType: 'left' | 'right' | 'bottom') => {
+  const injuredAllies: Array<{
+    wallType: 'left' | 'right' | 'bottom',
+    cellIndex: number,
+    wallCell: any,
+    currentHealth: number,
+    maxHealth: number
+  }> = []
+  
+  // Get the appropriate wall cells based on wall type
+  let wallCells: any[]
+  let maxCells: number
+  
+  if (wallType === 'left') {
+    wallCells = leftWallCells
+    maxCells = leftWallCells.length
+  } else if (wallType === 'right') {
+    wallCells = rightWallCells
+    maxCells = rightWallCells.length
+  } else {
+    wallCells = bottomWallCells
+    maxCells = bottomWallCells.length
+  }
+  
+  // Check each cell for injured allies
+  for (let i = 0; i < maxCells; i++) {
+    const cell = wallCells[i]
+    if (cell && cell.isOccupied && cell.currentHealth !== undefined && cell.maxHealth !== undefined) {
+      if (cell.currentHealth < cell.maxHealth) {
+        injuredAllies.push({
+          wallType,
+          cellIndex: i,
+          wallCell: cell,
+          currentHealth: cell.currentHealth,
+          maxHealth: cell.maxHealth
+        })
+      }
+    }
+  }
+  
+  return injuredAllies
 }
 
 /**
@@ -609,6 +856,7 @@ const checkProjectileEnemyCollision = (projectile: Projectile): any => {
 export const renderCombatEffects = (ctx: CanvasRenderingContext2D) => {
   renderEnemies(ctx)
   renderSlashEffects(ctx) // Render slash effects above enemies but below other effects
+  renderClawsEffects(ctx) // Render claws effects above enemies but below other effects
   renderAttackAnimations(ctx)
   renderHitAnimations(ctx)
   renderProjectiles(ctx)
@@ -687,9 +935,9 @@ const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
     const lineWidth = 6 // Thick red border
     ctx.lineWidth = lineWidth
     
-    // Calculate multi-cell dimensions
-    const totalWidth = anim.enemyWidth * BATTLEFIELD_CELL_SIZE
-    const totalHeight = anim.enemyHeight * BATTLEFIELD_CELL_SIZE
+    // Calculate multi-cell dimensions (including borders between cells)
+    const totalWidth = anim.enemyWidth * BATTLEFIELD_CELL_SIZE + (anim.enemyWidth - 1) * BATTLEFIELD_CELL_BORDER_WIDTH
+    const totalHeight = anim.enemyHeight * BATTLEFIELD_CELL_SIZE + (anim.enemyHeight - 1) * BATTLEFIELD_CELL_BORDER_WIDTH
     
     // Draw inner rounded rectangle for hit animation scaled to enemy size
     // Adjust coordinates and size to draw inside the enemy's total area

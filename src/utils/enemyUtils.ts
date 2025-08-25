@@ -2,6 +2,9 @@ import { Enemy, EnemyType, BattlefieldCell } from '../types/enemies'
 import { ENEMY_UNITS, getSpawnableEnemyUnits } from '../config/allUnitsConfig'
 import { generateUUID } from './uuidUtils'
 import { renderPainEffect } from './painEffectUtils'
+import { spawnClawsEffect } from './clawsUtils'
+import { getWallCell, getWallCellCoordinates } from './wallExtensions'
+import { spawnDamageNumberAtPosition } from './damageNumberUtils'
 // import { addLogMessage } from './logsUtils' // Not used anymore after log cleanup
 import {
   LEVEL_WIDTH,
@@ -14,7 +17,8 @@ import {
   BATTLEFIELD_Y,
   BATTLEFIELD_CELL_SIZE,
   BATTLEFIELD_CELL_BORDER_WIDTH,
-  BATTLEFIELD_BORDER_WIDTH
+  BATTLEFIELD_BORDER_WIDTH,
+  WALL_CELL_SIZE
 } from '../config/gameConfig'
 import { getCachedImage } from './imageUtils'
 
@@ -86,26 +90,19 @@ export const isTopRowBlocked = (): boolean => {
 export const rollIndependentEnemySpawns = (): EnemyType[] => {
   // Check if top row is blocked first
   if (isTopRowBlocked()) {
-    console.log('🚫 Top row blocked, no spawns')
     return []
   }
   
   const spawnableEnemies = getSpawnableEnemyUnits()
-  console.log('🎲 Spawnable enemies:', spawnableEnemies.map(e => `${e.name} (${e.spawnChance * 100}%)`))
-  
   const eligibleSpawns: EnemyType[] = []
   
   // Roll for each enemy type independently
   for (const enemyType of spawnableEnemies) {
     const spawnRoll = Math.random()
-    console.log(`🎯 ${enemyType.name}: rolled ${spawnRoll.toFixed(3)} vs ${enemyType.spawnChance.toFixed(3)}`)
     if (spawnRoll <= enemyType.spawnChance) {
-      console.log(`✅ ${enemyType.name} eligible for spawn!`)
       eligibleSpawns.push(enemyType)
     }
   }
-  
-  console.log(`📊 Total eligible spawns: ${eligibleSpawns.length}, max allowed: ${MAX_ENEMY_SPAWNS_PER_TURN}`)
   
   // Limit to MAX_ENEMY_SPAWNS_PER_TURN
   const maxSpawns = Math.min(eligibleSpawns.length, MAX_ENEMY_SPAWNS_PER_TURN)
@@ -186,13 +183,10 @@ export const canPlaceEnemyAt = (x: number, y: number, enemyType: EnemyType): boo
 
 // Spawn a new enemy
 export const spawnEnemy = (enemyType: EnemyType): boolean => {
-  console.log(`🐛 Attempting to spawn ${enemyType.name} (${enemyType.width}x${enemyType.height})`)
   const position = findSpawnPosition(enemyType)
   if (!position) {
-    console.log(`❌ No valid position found for ${enemyType.name}`)
     return false
   }
-  console.log(`✅ Spawning ${enemyType.name} at position (${position.x}, ${position.y})`)
   
   const newEnemy: Enemy = {
     id: `${enemyType.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -276,24 +270,221 @@ export const moveEnemyDown = (enemy: Enemy): boolean => {
   return true
 }
 
-// Process enemy turn (movement)
+// Process enemy turn (movement and attacks)
 export const processEnemyTurn = (): void => {
   debugEnemyState('MOVE_START')
   
   const orderedEnemies = getEnemiesInProcessingOrder()
   
   for (const enemy of orderedEnemies) {
+    // Try to move first
     const moved = moveEnemyDown(enemy)
     
-    // Check if Lich couldn't move and try to spawn Skeleton
-    if (!moved && enemy.type.id === 'lich') {
-      tryLichSkeletonSpawn(enemy)
+    // If enemy couldn't move, try to attack adjacent allies
+    if (!moved) {
+      tryEnemyAttack(enemy)
+      
+      // Check if Lich couldn't move and try to spawn Skeleton (existing behavior)
+      if (enemy.type.id === 'lich') {
+        tryLichSkeletonSpawn(enemy)
+      }
     }
     
     enemy.turnsSinceSpawn += 1
   }
   
   debugEnemyState('MOVE_END')
+}
+
+/**
+ * Try to attack adjacent allies when enemy cannot move
+ */
+const tryEnemyAttack = (enemy: Enemy): void => {
+  // Debug: Log enemies in rightmost column who can't move
+  const isInRightmostColumn = enemy.x + enemy.type.width - 1 === LEVEL_WIDTH - 1
+  if (isInRightmostColumn) {
+    console.log(`👹 Enemy ${enemy.type.name} at (${enemy.x},${enemy.y}) in rightmost column, checking for right wall allies`)
+  }
+  
+  const adjacentAllies = findAdjacentAllies(enemy)
+  
+  if (adjacentAllies.length === 0) {
+    if (isInRightmostColumn) {
+      console.log(`❌ No adjacent allies found for rightmost enemy ${enemy.type.name}`)
+      // Debug: dump all right wall units
+      const rightWallStatus = []
+      for (let i = 0; i < LEVEL_HEIGHT; i++) {
+        const cell = getWallCell('right', i)
+        rightWallStatus.push(`Cell ${i}: ${cell?.isOccupied ? `occupied by ${cell.occupiedBy}` : 'empty'}`)
+      }
+      console.log('🏰 Right wall status:', rightWallStatus.join(', '))
+    }
+    return // No adjacent allies to attack
+  }
+  
+  // Pick one ally to attack (enemies attack only one ally per turn)
+  const targetAlly = adjacentAllies[Math.floor(Math.random() * adjacentAllies.length)]
+  
+  if (isInRightmostColumn) {
+    console.log(`⚔️ Rightmost enemy ${enemy.type.name} attacking ${targetAlly.wallType} wall cell ${targetAlly.cellIndex}`)
+  }
+  
+  // Deal 1 damage to the ally (all enemies deal 1 damage)
+  damageAlly(targetAlly.wallType, targetAlly.cellIndex, 1, enemy)
+}
+
+/**
+ * Find all allies adjacent to an enemy in counter-clockwise order starting from top-left
+ */
+const findAdjacentAllies = (enemy: Enemy): Array<{wallType: 'left' | 'right' | 'bottom', cellIndex: number}> => {
+  const adjacentAllies: Array<{wallType: 'left' | 'right' | 'bottom', cellIndex: number}> = []
+  
+  // Check if this is a rightmost column enemy for debug logging
+  // (removed unused variable for now)
+  
+  // Generate all adjacent positions in counter-clockwise order starting from top-left
+  const allAdjacentPositions: Array<{x: number, y: number}> = []
+  
+  // Check each cell of the enemy for adjacencies
+  for (let dy = 0; dy < enemy.type.height; dy++) {
+    for (let dx = 0; dx < enemy.type.width; dx++) {
+      const enemyX = enemy.x + dx
+      const enemyY = enemy.y + dy
+      
+      // Only visible enemy cells can attack (ignore negative rows)
+      if (enemyY < 0) {
+        continue
+      }
+      
+      // Add adjacent positions for this cell
+      const positions = [
+        {x: enemyX - 1, y: enemyY}, // Left
+        {x: enemyX + 1, y: enemyY}, // Right
+        {x: enemyX, y: enemyY - 1}, // Up
+        {x: enemyX, y: enemyY + 1}  // Down
+      ]
+      
+      for (const pos of positions) {
+        // Avoid duplicates
+        if (!allAdjacentPositions.some(p => p.x === pos.x && p.y === pos.y)) {
+          allAdjacentPositions.push(pos)
+        }
+      }
+    }
+  }
+  
+  // Sort positions counter-clockwise starting from top-left relative to enemy center
+  const centerX = enemy.x + (enemy.type.width - 1) / 2
+  const centerY = Math.max(enemy.y + (enemy.type.height - 1) / 2, 0)
+  
+  allAdjacentPositions.sort((a, b) => {
+    // Calculate angle from center to each position (counter-clockwise from top)
+    const angleA = Math.atan2(a.y - centerY, a.x - centerX)
+    const angleB = Math.atan2(b.y - centerY, b.x - centerX)
+    
+    // Normalize angles to [0, 2π] and start from top (-π/2)
+    const normalizedA = (angleA + Math.PI * 2.5) % (Math.PI * 2)
+    const normalizedB = (angleB + Math.PI * 2.5) % (Math.PI * 2)
+    
+    return normalizedA - normalizedB
+  })
+  
+  // Check positions in order and return all allies found
+  for (const pos of allAdjacentPositions) {
+    const wallInfo = getWallInfoForBattlefieldPosition(pos.x, pos.y)
+    
+    if (wallInfo) {
+      // IMPORTANT: Account for right wall mapping being reversed!
+      // The mapping system reverses right wall cells, but for adjacency we want direct mapping
+      // So battlefield y should correspond directly to right wall cell y for logical adjacency
+      let actualCellIndex = wallInfo.cellIndex
+      if (wallInfo.wallType === 'right') {
+        // Use pos.y directly instead of the reversed wallInfo.cellIndex
+        // This makes battlefield y=0 attack right wall cell 0, y=11 attack cell 11, etc.
+        actualCellIndex = pos.y
+      }
+      
+      const isOccupied = isWallCellOccupiedByAlly(wallInfo.wallType, actualCellIndex)
+      
+      if (isOccupied) {
+        // Add to list if not already present
+        if (!adjacentAllies.some(ally => 
+          ally.wallType === wallInfo.wallType && ally.cellIndex === actualCellIndex)) {
+          adjacentAllies.push({wallType: wallInfo.wallType, cellIndex: actualCellIndex})
+        }
+      }
+    }
+  }
+  
+  return adjacentAllies
+}
+
+/**
+ * Deal damage to an ally and handle death
+ */
+const damageAlly = (wallType: 'left' | 'right' | 'bottom', cellIndex: number, damage: number, _attacker: Enemy): void => {
+  const wallCell = getWallCell(wallType, cellIndex)
+  if (!wallCell || !wallCell.isOccupied || !wallCell.occupiedBy) {
+    return
+  }
+  
+  // Deal damage
+  const currentHealth = wallCell.currentHealth || 0
+  const newHealth = Math.max(0, currentHealth - damage)
+  wallCell.currentHealth = newHealth
+  
+  // Spawn claws effect
+  spawnClawsEffect(wallType, cellIndex)
+  
+  // Spawn damage number above the ally
+  const wallCoords = getWallCellCoordinates(wallType, cellIndex)
+  if (wallCoords) {
+    const centerX = wallCoords.x + WALL_CELL_SIZE / 2
+    const centerY = wallCoords.y - 10 // Above the ally
+    spawnDamageNumberAtPosition(centerX, centerY, damage)
+  }
+  
+  // Check if ally died
+  if (newHealth <= 0) {
+    
+    // Clear the wall cell
+    wallCell.isOccupied = false
+    wallCell.occupiedBy = undefined
+    wallCell.currentHealth = undefined
+    wallCell.maxHealth = undefined
+    wallCell.unitUuid = undefined
+  }
+}
+
+/**
+ * Check if a wall cell is occupied by an ally
+ */
+const isWallCellOccupiedByAlly = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): boolean => {
+  const wallCell = getWallCell(wallType, cellIndex)
+  return !!(wallCell && wallCell.isOccupied && wallCell.occupiedBy)
+}
+
+/**
+ * Convert battlefield position to wall info (if it corresponds to a wall cell)
+ */
+const getWallInfoForBattlefieldPosition = (x: number, y: number): {wallType: 'left' | 'right' | 'bottom', cellIndex: number} | null => {
+  // Left wall check (x = -1, y = 0 to LEVEL_HEIGHT-1)
+  if (x === -1 && y >= 0 && y < LEVEL_HEIGHT) {
+    return {wallType: 'left', cellIndex: y}
+  }
+  
+  // Right wall check (x = LEVEL_WIDTH, y = 0 to LEVEL_HEIGHT-1)
+  if (x === LEVEL_WIDTH && y >= 0 && y < LEVEL_HEIGHT) {
+    const cellIndex = LEVEL_HEIGHT - 1 - y // Right wall is reversed (keep this as-is)
+    return {wallType: 'right', cellIndex}
+  }
+  
+  // Bottom wall check (y = LEVEL_HEIGHT, x = 0 to LEVEL_WIDTH-1)
+  if (y === LEVEL_HEIGHT && x >= 0 && x < LEVEL_WIDTH) {
+    return {wallType: 'bottom', cellIndex: x}
+  }
+  
+  return null
 }
 
 /**
@@ -457,6 +648,80 @@ export const getEnemyAt = (x: number, y: number): Enemy | null => {
 }
 
 /**
+ * Spawn small spiders when a Large Spider dies
+ */
+const spawnSmallSpiders = (largeSpider: Enemy): void => {
+  console.log(`🕷️ Large Spider death: spawning small spiders at (${largeSpider.x}, ${largeSpider.y})`)
+  const spawnArea: { x: number, y: number }[] = []
+  
+  // Collect all cells that were occupied by the large spider
+  for (let dy = 0; dy < largeSpider.type.height; dy++) {
+    for (let dx = 0; dx < largeSpider.type.width; dx++) {
+      spawnArea.push({ x: largeSpider.x + dx, y: largeSpider.y + dy })
+    }
+  }
+  console.log(`📍 Large Spider occupied ${spawnArea.length} cells:`, spawnArea)
+  
+  // Shuffle spawn area to randomize positions
+  for (let i = spawnArea.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [spawnArea[i], spawnArea[j]] = [spawnArea[j], spawnArea[i]]
+  }
+  
+  // Weighted random for number of spiders (more spiders = less likely)
+  // 1 spider = weight 16, 2 spiders = weight 15, ..., 16 spiders = weight 1
+  const weights = Array.from({ length: 16 }, (_, i) => 16 - i)
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0)
+  let randomWeight = Math.random() * totalWeight
+  let numSpidersToSpawn = 1
+  
+  for (let i = 0; i < weights.length; i++) {
+    randomWeight -= weights[i]
+    if (randomWeight <= 0) {
+      numSpidersToSpawn = i + 1
+      break
+    }
+  }
+  
+  console.log(`🎲 Rolled ${numSpidersToSpawn} small spiders to spawn`)
+  
+  const smallSpiderType = ENEMY_UNITS.SPIDER_SMALL
+  console.log(`🔍 Small spider type:`, smallSpiderType ? 'found' : 'NOT FOUND')
+  
+  let spawnedCount = 0
+  
+  // Try to spawn small spiders in the available positions
+  for (let i = 0; i < numSpidersToSpawn && i < spawnArea.length; i++) {
+    const { x, y } = spawnArea[i]
+    
+    console.log(`🎯 Trying to spawn small spider #${i + 1} at (${x}, ${y})`)
+    
+    // Check if the position is valid and not already occupied by another enemy
+    if (canPlaceEnemyAt(x, y, smallSpiderType)) {
+      const newSmallSpider: Enemy = {
+        id: `spider_small_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        uuid: generateUUID(),
+        type: smallSpiderType,
+        x: x,
+        y: y,
+        health: smallSpiderType.health,
+        maxHealth: smallSpiderType.health,
+        turnsSinceSpawn: 0
+      }
+      
+      enemies.push(newSmallSpider)
+      setBattlefieldCell(x, y, newSmallSpider.id)
+      spawnedCount++
+      console.log(`✅ Successfully spawned small spider at (${x}, ${y})`)
+    } else {
+      console.log(`❌ Cannot spawn small spider at (${x}, ${y}) - position blocked`)
+    }
+  }
+  
+  console.log(`📊 Spawned ${spawnedCount}/${numSpidersToSpawn} small spiders`)
+}
+
+/**
  * Remove an enemy from the battlefield
  */
 export const removeEnemy = (enemyToRemove: Enemy): boolean => {
@@ -465,7 +730,7 @@ export const removeEnemy = (enemyToRemove: Enemy): boolean => {
     return false // Enemy not found
   }
   
-  // Clear battlefield cells occupied by this enemy
+  // Clear battlefield cells occupied by this enemy FIRST
   for (let dy = 0; dy < enemyToRemove.type.height; dy++) {
     for (let dx = 0; dx < enemyToRemove.type.width; dx++) {
       setBattlefieldCell(enemyToRemove.x + dx, enemyToRemove.y + dy, undefined)
@@ -474,6 +739,11 @@ export const removeEnemy = (enemyToRemove: Enemy): boolean => {
   
   // Remove enemy from array
   enemies.splice(enemyIndex, 1)
+  
+  // AFTER clearing battlefield, check if this is a Large Spider - spawn small spiders
+  if (enemyToRemove.type.id === 'spider_large') {
+    spawnSmallSpiders(enemyToRemove)
+  }
   return true
 }
 

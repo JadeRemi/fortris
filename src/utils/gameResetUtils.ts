@@ -2,6 +2,7 @@ import { stopCombat } from './combatUtils'
 import { enemies, initializeBattlefield } from './enemyUtils'
 import { clearAllWallCells } from './wallExtensions'
 import { clearAllLogs } from './logsUtils'
+import { resetDiamondCount } from './diamondUtils'
 import {
   globalSelection,
   resetArmyStates
@@ -30,9 +31,14 @@ export const restartGame = (): void => {
   resetArmyStates()
   
   // Clear global selection state
-  globalSelection.isUnitSelected = false
+  globalSelection.isAnySelected = false
+  globalSelection.selectedType = null
   globalSelection.selectedUnitType = null
   globalSelection.cursorSprite = null
+  
+  // Reset inventory counts
+  resetDiamondCount()
+  // Note: Coin count is already reset by clearCoins() in stopCombat()
   
   // Note: Combat system will auto-restart when units are placed again
   // Note: All projectiles and animations are cleared by stopCombat()

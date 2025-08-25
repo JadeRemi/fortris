@@ -25,9 +25,9 @@ import {
 } from '../config/gameConfig'
 
 // Wall cell occupation tracking
-let leftWallCells: WallCell[] = []
-let rightWallCells: WallCell[] = []
-let bottomWallCells: WallCell[] = []
+export let leftWallCells: WallCell[] = []
+export let rightWallCells: WallCell[] = []
+export let bottomWallCells: WallCell[] = []
 
 // Initialize wall cells
 const initializeWallCells = () => {
@@ -348,20 +348,29 @@ export const getBottomWallCellIndex = (x: number, y: number): number => {
 export const clearAllWallCells = (): void => {
   // Clear left wall
   for (const cell of leftWallCells) {
+    cell.isOccupied = false
     cell.occupiedBy = undefined
     cell.currentHealth = undefined
+    cell.maxHealth = undefined
+    cell.unitUuid = undefined
   }
   
   // Clear right wall  
   for (const cell of rightWallCells) {
+    cell.isOccupied = false
     cell.occupiedBy = undefined
     cell.currentHealth = undefined
+    cell.maxHealth = undefined
+    cell.unitUuid = undefined
   }
   
   // Clear bottom wall
   for (const cell of bottomWallCells) {
+    cell.isOccupied = false
     cell.occupiedBy = undefined
     cell.currentHealth = undefined
+    cell.maxHealth = undefined
+    cell.unitUuid = undefined
   }
 }
 
