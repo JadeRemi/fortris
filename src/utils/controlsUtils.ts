@@ -1,16 +1,18 @@
 import { renderText } from './fontUtils'
 import { drawImage, getCachedImage } from './imageUtils'
-import { 
+import {
   CONTROLS_X, CONTROLS_Y, CONTROLS_WIDTH, 
   ARMY_X, ARMY_Y, ARMY_WIDTH,
   ARMY_UNIT_CELL_SIZE,
   SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y,
   BOWMAN_CELL_X, BOWMAN_CELL_Y,
-  INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT
+  MONK_CELL_X, MONK_CELL_Y,
+  INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT, INITIAL_MONK_COUNT, ARMY_BUY_BUTTON_GAP
 } from '../config/gameConfig'
 import { TEXT_PRIMARY, BATTLEFIELD_CELL_BORDER, BATTLEFIELD_CELL_EMPTY } from '../config/palette'
 import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { placeUnitOnWall } from './wallExtensions'
+import { showTooltip, hideTooltip, isPointInRect } from './tooltipUtils'
 
 // Army unit selection state
 interface ArmyUnitState {
@@ -36,6 +38,12 @@ export let bowmanState: ArmyUnitState = {
   isSelected: false,
   selectionStartTime: 0,
   count: INITIAL_BOWMAN_COUNT
+}
+
+export let monkState: ArmyUnitState = {
+  isSelected: false,
+  selectionStartTime: 0,
+  count: INITIAL_MONK_COUNT
 }
 
 export let globalSelection: GlobalSelectionState = {
@@ -68,7 +76,7 @@ export const renderControls = (ctx: CanvasRenderingContext2D) => {
 /**
  * Render the army section
  */
-export const renderArmy = (ctx: CanvasRenderingContext2D) => {
+export const renderArmy = (ctx: CanvasRenderingContext2D, mouseX: number = 0, mouseY: number = 0) => {
   // Draw army section background (optional border)
   ctx.strokeStyle = '#666666'
   ctx.lineWidth = 1
@@ -88,6 +96,12 @@ export const renderArmy = (ctx: CanvasRenderingContext2D) => {
   // Render unit cells
   renderSwordsmanCell(ctx)
   renderBowmanCell(ctx)
+  renderMonkCell(ctx)
+  
+  // Render plus buttons with mouse position for hover detection
+  renderSwordsmanPlusButton(ctx, mouseX, mouseY)
+  renderBowmanPlusButton(ctx, mouseX, mouseY)
+  renderMonkPlusButton(ctx, mouseX, mouseY)
 }
 
 /**
@@ -369,7 +383,8 @@ export const handleGlobalClick = (_x: number, _y: number, renderCallback: () => 
   
   // Always deselect the unit after any click
   swordsmanState.isSelected = false
-  bowmanState.isSelected = false // Fix: Also deselect bowman
+  bowmanState.isSelected = false
+  monkState.isSelected = false
   globalSelection.isUnitSelected = false
   globalSelection.selectedUnitType = null
   globalSelection.cursorSprite = null
@@ -394,6 +409,8 @@ export const tryPlaceUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIn
     unitState = swordsmanState
   } else if (globalSelection.selectedUnitType === ALLY_UNITS.BOWMAN.id) {
     unitState = bowmanState
+  } else if (globalSelection.selectedUnitType === ALLY_UNITS.MONK.id) {
+    unitState = monkState
   } else {
     return false // Unknown unit type
   }
@@ -573,10 +590,20 @@ export const isPointInBowmanCell = (x: number, y: number): boolean => {
 }
 
 /**
+ * Check if a point is within the monk cell
+ */
+export const isPointInMonkCell = (x: number, y: number): boolean => {
+  return x >= MONK_CELL_X && 
+         x <= MONK_CELL_X + ARMY_UNIT_CELL_SIZE && 
+         y >= MONK_CELL_Y && 
+         y <= MONK_CELL_Y + ARMY_UNIT_CELL_SIZE
+}
+
+/**
  * Check if a point is within any army unit cell
  */
 export const isPointInAnyUnitCell = (x: number, y: number): boolean => {
-  return isPointInSwordsmanCell(x, y) || isPointInBowmanCell(x, y)
+  return isPointInSwordsmanCell(x, y) || isPointInBowmanCell(x, y) || isPointInMonkCell(x, y)
 }
 
 /**
@@ -590,4 +617,440 @@ export const resetArmyStates = (): void => {
   bowmanState.isSelected = false
   bowmanState.selectionStartTime = 0
   bowmanState.count = INITIAL_BOWMAN_COUNT
+  
+  monkState.isSelected = false
+  monkState.selectionStartTime = 0
+  monkState.count = INITIAL_MONK_COUNT
+}
+
+/**
+ * Helper functions for plus button positioning
+ */
+export const getSwordsmanPlusButtonX = (): number => SWORDSMAN_CELL_X + ARMY_UNIT_CELL_SIZE + ARMY_BUY_BUTTON_GAP
+export const getBowmanPlusButtonX = (): number => BOWMAN_CELL_X + ARMY_UNIT_CELL_SIZE + ARMY_BUY_BUTTON_GAP
+export const getMonkPlusButtonX = (): number => MONK_CELL_X + ARMY_UNIT_CELL_SIZE + ARMY_BUY_BUTTON_GAP
+
+/**
+ * Render Swordsman plus button
+ */
+const renderSwordsmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 0, mouseY: number = 0) => {
+  const cellX = getSwordsmanPlusButtonX()
+  const cellY = SWORDSMAN_CELL_Y
+  const cellSize = ARMY_UNIT_CELL_SIZE
+  
+  // Check if any unit is currently selected for placement
+  const selectionState = getSelectionState()
+  const isDisabled = selectionState.isUnitSelected
+  
+  // Check if mouse is hovering over this button
+  const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
+
+  // Draw cell background (always same style)
+  ctx.save()
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(cellX, cellY, cellSize, cellSize)
+  
+  // Draw cell border (always same style)
+  ctx.strokeStyle = BATTLEFIELD_CELL_BORDER
+  ctx.lineWidth = 1
+  ctx.strokeRect(cellX, cellY, cellSize, cellSize)
+  
+  // Only draw plus symbol when enabled
+  if (!isDisabled) {
+    let fillColor = TEXT_PRIMARY
+    
+    // Add pulsation only on hover
+    if (isHovered) {
+      // Calculate pulsation for golden color animation
+      const currentTime = Date.now()
+      const pulsationSpeed = 2000 // 2 seconds for full cycle (same as wall hover)
+      const pulsationPhase = (currentTime % pulsationSpeed) / pulsationSpeed
+      const pulsationIntensity = Math.sin(pulsationPhase * Math.PI * 2) * 0.5 + 0.5
+      
+      // Interpolate between normal text color and dark golden
+      const normalColor = { r: 255, g: 255, b: 255 } // White
+      const goldenColor = { r: 184, g: 134, b: 11 }   // Dark golden
+      
+      const r = Math.floor(normalColor.r + (goldenColor.r - normalColor.r) * pulsationIntensity)
+      const g = Math.floor(normalColor.g + (goldenColor.g - normalColor.g) * pulsationIntensity)
+      const b = Math.floor(normalColor.b + (goldenColor.b - normalColor.b) * pulsationIntensity)
+      
+      fillColor = `rgb(${r}, ${g}, ${b})`
+    }
+    
+    ctx.fillStyle = fillColor
+    ctx.font = '24px monospace'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('+', cellX + cellSize / 2, cellY + cellSize / 2)
+  }
+  
+  ctx.restore()
+}
+
+/**
+ * Render Bowman plus button
+ */
+const renderBowmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 0, mouseY: number = 0) => {
+  const cellX = getBowmanPlusButtonX()
+  const cellY = BOWMAN_CELL_Y
+  const cellSize = ARMY_UNIT_CELL_SIZE
+  
+  // Check if any unit is currently selected for placement
+  const selectionState = getSelectionState()
+  const isDisabled = selectionState.isUnitSelected
+  
+  // Check if mouse is hovering over this button
+  const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
+
+  // Draw cell background (always same style)
+  ctx.save()
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(cellX, cellY, cellSize, cellSize)
+  
+  // Draw cell border (always same style)
+  ctx.strokeStyle = BATTLEFIELD_CELL_BORDER
+  ctx.lineWidth = 1
+  ctx.strokeRect(cellX, cellY, cellSize, cellSize)
+  
+  // Only draw plus symbol when enabled
+  if (!isDisabled) {
+    let fillColor = TEXT_PRIMARY
+    
+    // Add pulsation only on hover
+    if (isHovered) {
+      // Calculate pulsation for golden color animation
+      const currentTime = Date.now()
+      const pulsationSpeed = 2000 // 2 seconds for full cycle (same as wall hover)
+      const pulsationPhase = (currentTime % pulsationSpeed) / pulsationSpeed
+      const pulsationIntensity = Math.sin(pulsationPhase * Math.PI * 2) * 0.5 + 0.5
+      
+      // Interpolate between normal text color and dark golden
+      const normalColor = { r: 255, g: 255, b: 255 } // White
+      const goldenColor = { r: 184, g: 134, b: 11 }   // Dark golden
+      
+      const r = Math.floor(normalColor.r + (goldenColor.r - normalColor.r) * pulsationIntensity)
+      const g = Math.floor(normalColor.g + (goldenColor.g - normalColor.g) * pulsationIntensity)
+      const b = Math.floor(normalColor.b + (goldenColor.b - normalColor.b) * pulsationIntensity)
+      
+      fillColor = `rgb(${r}, ${g}, ${b})`
+    }
+    
+    ctx.fillStyle = fillColor
+    ctx.font = '24px monospace'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('+', cellX + cellSize / 2, cellY + cellSize / 2)
+  }
+  
+  ctx.restore()
+}
+
+/**
+ * Render the monk unit cell in the army section
+ */
+const renderMonkCell = (ctx: CanvasRenderingContext2D) => {
+  ctx.save()
+  
+  // Draw cell background (same as battlefield cells)
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(MONK_CELL_X, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+  
+  // Draw cell border - darker when disabled
+  ctx.strokeStyle = monkState.count > 0 ? BATTLEFIELD_CELL_BORDER : '#333333'
+  ctx.lineWidth = 1
+  ctx.strokeRect(MONK_CELL_X, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+  
+  // Draw monk image (centered in cell) with sprite scaling
+  const spriteScale = ALLY_UNITS.MONK.spriteScale || 1.0
+  const baseImageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
+  const scaledImageSize = baseImageSize * spriteScale
+  const imageX = MONK_CELL_X + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
+  const imageY = MONK_CELL_Y + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
+  
+  // Draw image if loaded - semi-transparent when disabled
+  const monkImage = getCachedImage(ALLY_UNITS.MONK.imagePath)
+  if (monkImage) {
+    // Set opacity - semi-transparent when disabled
+    ctx.globalAlpha = monkState.count > 0 ? 1.0 : 0.3
+    drawImage(ctx, monkImage, imageX, imageY, scaledImageSize, scaledImageSize)
+    ctx.globalAlpha = 1.0 // Reset opacity
+  }
+  
+  // Draw selection animation if selected
+  const selectionState = getSelectionState()
+  if (selectionState.isUnitSelected && selectionState.selectedUnitType === 'monk') {
+    drawSelectionAnimation(ctx, MONK_CELL_X, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE)
+  }
+  
+  // Draw numeric counter in bottom right corner (over everything else)
+  drawUnitCounter(ctx, MONK_CELL_X, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, monkState.count)
+  
+  ctx.restore()
+}
+
+/**
+ * Render Monk plus button
+ */
+const renderMonkPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 0, mouseY: number = 0) => {
+  const cellX = getMonkPlusButtonX()
+  const cellY = MONK_CELL_Y
+  const cellSize = ARMY_UNIT_CELL_SIZE
+  
+  // Check if any unit is currently selected for placement
+  const selectionState = getSelectionState()
+  const isDisabled = selectionState.isUnitSelected
+  
+  // Check if mouse is hovering over this button
+  const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
+
+  // Draw cell background (always same style)
+  ctx.save()
+  ctx.fillStyle = BATTLEFIELD_CELL_EMPTY
+  ctx.fillRect(cellX, cellY, cellSize, cellSize)
+  
+  // Draw cell border (always same style)
+  ctx.strokeStyle = BATTLEFIELD_CELL_BORDER
+  ctx.lineWidth = 1
+  ctx.strokeRect(cellX, cellY, cellSize, cellSize)
+  
+  // Only draw plus symbol when enabled
+  if (!isDisabled) {
+    let fillColor = TEXT_PRIMARY
+    
+    // Add pulsation only on hover
+    if (isHovered) {
+      // Calculate pulsation for golden color animation
+      const currentTime = Date.now()
+      const pulsationSpeed = 2000 // 2 seconds for full cycle (same as wall hover)
+      const pulsationPhase = (currentTime % pulsationSpeed) / pulsationSpeed
+      const pulsationIntensity = Math.sin(pulsationPhase * Math.PI * 2) * 0.5 + 0.5
+      
+      // Interpolate between normal text color and dark golden
+      const normalColor = { r: 255, g: 255, b: 255 } // White
+      const goldenColor = { r: 184, g: 134, b: 11 }   // Dark golden
+      
+      const r = Math.floor(normalColor.r + (goldenColor.r - normalColor.r) * pulsationIntensity)
+      const g = Math.floor(normalColor.g + (goldenColor.g - normalColor.g) * pulsationIntensity)
+      const b = Math.floor(normalColor.b + (goldenColor.b - normalColor.b) * pulsationIntensity)
+      
+      fillColor = `rgb(${r}, ${g}, ${b})`
+    }
+    
+    ctx.fillStyle = fillColor
+    ctx.font = '24px monospace'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('+', cellX + cellSize / 2, cellY + cellSize / 2)
+  }
+  
+  ctx.restore()
+}
+
+/**
+ * Handle Monk click
+ */
+const handleMonkClick = (x: number, y: number, renderCallback: () => void) => {
+  // Check if click is within monk cell bounds
+  if (x >= MONK_CELL_X && 
+      x <= MONK_CELL_X + ARMY_UNIT_CELL_SIZE && 
+      y >= MONK_CELL_Y && 
+      y <= MONK_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    
+    // Can't select if unit is disabled (count <= 0)
+    if (monkState.count <= 0) {
+      return true // Consumed the click but didn't change state
+    }
+    
+    // Mutual exclusion: deselect other units if selected
+    if (swordsmanState.isSelected) {
+      swordsmanState.isSelected = false
+      stopSelectionAnimation()
+    }
+    if (bowmanState.isSelected) {
+      bowmanState.isSelected = false
+      stopSelectionAnimation()
+    }
+    
+    // Toggle selection state
+    monkState.isSelected = !monkState.isSelected
+    monkState.selectionStartTime = Date.now()
+    
+    // Update global selection state
+    if (monkState.isSelected) {
+      globalSelection.isUnitSelected = true
+      globalSelection.selectedUnitType = ALLY_UNITS.MONK.id
+      globalSelection.cursorSprite = getCachedImage(ALLY_UNITS.MONK.imagePath) || null
+      startSelectionAnimation(renderCallback)
+    } else {
+      globalSelection.isUnitSelected = false
+      globalSelection.selectedUnitType = null
+      globalSelection.cursorSprite = null
+      stopSelectionAnimation()
+    }
+    
+    renderCallback()
+    return true
+  }
+  
+  return false
+}
+
+/**
+ * Handle Monk plus button click
+ */
+const handleMonkPlusClick = (renderCallback?: () => void) => {
+  // Check if any unit is currently selected for placement (disable when disabled)
+  const selectionState = getSelectionState()
+  if (selectionState.isUnitSelected) {
+    return // Ignore click when disabled
+  }
+
+  // Increment monk count
+  monkState.count++
+  
+  // Re-render if callback provided
+  if (renderCallback) {
+    renderCallback()
+  }
+}
+
+/**
+ * Handle Swordsman plus button click
+ */
+const handleSwordsmanPlusClick = (renderCallback?: () => void) => {
+  // Don't allow purchasing while a unit is selected for placement
+  const selectionState = getSelectionState()
+  if (selectionState.isUnitSelected) {
+    return // Ignore click when disabled
+  }
+  
+  swordsmanState.count += 1
+  if (renderCallback) renderCallback()
+}
+
+/**
+ * Handle Bowman plus button click
+ */
+const handleBowmanPlusClick = (renderCallback?: () => void) => {
+  // Don't allow purchasing while a unit is selected for placement
+  const selectionState = getSelectionState()
+  if (selectionState.isUnitSelected) {
+    return // Ignore click when disabled
+  }
+  
+  bowmanState.count += 1
+  if (renderCallback) renderCallback()
+}
+
+/**
+ * Handle mouse movement over army units (includes tooltip logic)
+ */
+export const handleArmyMouseMove = (x: number, y: number, _renderCallback?: () => void, statsEnabled: boolean = true) => {
+  // Only show tooltips if stats are enabled AND no unit is selected for placement
+  const selectionState = getSelectionState()
+  if (!statsEnabled || selectionState.isUnitSelected) {
+    hideTooltip()
+    return
+  }
+  
+  // Check if hovering over Swordsman cell
+  if (isPointInRect(x, y, SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)) {
+    const centerX = SWORDSMAN_CELL_X + ARMY_UNIT_CELL_SIZE / 2
+    const centerY = SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE / 2
+    showTooltip('Swordsman', centerX, centerY)
+    return
+  }
+  
+  // Check if hovering over Bowman cell
+  if (isPointInRect(x, y, BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)) {
+    const centerX = BOWMAN_CELL_X + ARMY_UNIT_CELL_SIZE / 2
+    const centerY = BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE / 2
+    showTooltip('Bowman', centerX, centerY)
+    return
+  }
+  
+  // Check if hovering over Swordsman plus button
+  if (isPointInRect(x, y, getSwordsmanPlusButtonX(), SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)) {
+    const centerX = getSwordsmanPlusButtonX() + ARMY_UNIT_CELL_SIZE / 2
+    const centerY = SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE / 2
+    showTooltip('Buy Swordsman', centerX, centerY)
+    return
+  }
+  
+  // Check if hovering over Bowman plus button
+  if (isPointInRect(x, y, getBowmanPlusButtonX(), BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)) {
+    const centerX = getBowmanPlusButtonX() + ARMY_UNIT_CELL_SIZE / 2
+    const centerY = BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE / 2
+    showTooltip('Buy Bowman', centerX, centerY)
+    return
+  }
+  
+  // Check if hovering over Monk cell
+  if (isPointInRect(x, y, MONK_CELL_X, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)) {
+    const centerX = MONK_CELL_X + ARMY_UNIT_CELL_SIZE / 2
+    const centerY = MONK_CELL_Y + ARMY_UNIT_CELL_SIZE / 2
+    showTooltip('Monk', centerX, centerY)
+    return
+  }
+  
+  // Check if hovering over Monk plus button
+  if (isPointInRect(x, y, getMonkPlusButtonX(), MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)) {
+    const centerX = getMonkPlusButtonX() + ARMY_UNIT_CELL_SIZE / 2
+    const centerY = MONK_CELL_Y + ARMY_UNIT_CELL_SIZE / 2
+    showTooltip('Buy Monk', centerX, centerY)
+    return
+  }
+  
+  // If not hovering over any army element, hide tooltip
+  hideTooltip()
+}
+
+/**
+ * Handle mouse click on army units and plus buttons
+ */
+export const handleArmyClick = (x: number, y: number, renderCallback?: () => void): boolean => {
+  // Check for Swordsman cell click
+  if (x >= SWORDSMAN_CELL_X && x < SWORDSMAN_CELL_X + ARMY_UNIT_CELL_SIZE &&
+      y >= SWORDSMAN_CELL_Y && y < SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    handleSwordsmanClick(x, y, renderCallback || (() => {}))
+    return true
+  }
+  
+  // Check for Bowman cell click
+  if (x >= BOWMAN_CELL_X && x < BOWMAN_CELL_X + ARMY_UNIT_CELL_SIZE &&
+      y >= BOWMAN_CELL_Y && y < BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    handleBowmanClick(x, y, renderCallback || (() => {}))
+    return true
+  }
+  
+  // Check for Swordsman plus button click
+  if (x >= getSwordsmanPlusButtonX() && x < getSwordsmanPlusButtonX() + ARMY_UNIT_CELL_SIZE &&
+      y >= SWORDSMAN_CELL_Y && y < SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    handleSwordsmanPlusClick(renderCallback)
+    return true
+  }
+  
+  // Check for Bowman plus button click
+  if (x >= getBowmanPlusButtonX() && x < getBowmanPlusButtonX() + ARMY_UNIT_CELL_SIZE &&
+      y >= BOWMAN_CELL_Y && y < BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    handleBowmanPlusClick(renderCallback)
+    return true
+  }
+  
+  // Check for Monk cell click
+  if (x >= MONK_CELL_X && x < MONK_CELL_X + ARMY_UNIT_CELL_SIZE &&
+      y >= MONK_CELL_Y && y < MONK_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    handleMonkClick(x, y, renderCallback || (() => {}))
+    return true
+  }
+  
+  // Check for Monk plus button click
+  if (x >= getMonkPlusButtonX() && x < getMonkPlusButtonX() + ARMY_UNIT_CELL_SIZE &&
+      y >= MONK_CELL_Y && y < MONK_CELL_Y + ARMY_UNIT_CELL_SIZE) {
+    handleMonkPlusClick(renderCallback)
+    return true
+  }
+  
+  return false
 }

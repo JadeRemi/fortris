@@ -1,7 +1,8 @@
 // FPS tracking and display utilities
 
 import { enemies } from './enemyUtils'
-import { getCollectedCoinCount } from './coinUtils'
+// Removed getCollectedCoinCount import as coins are now displayed in inventory
+import { UI_FONT_SIZE_STATS } from '../config/gameConfig'
 
 class FPSTracker {
   private frameCount = 0
@@ -79,16 +80,26 @@ export const renderFPS = (ctx: CanvasRenderingContext2D): void => {
   const x = 20
   const y = 40
   
-  // Background for better readability
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-  ctx.fillRect(x - 10, y - 25, 100, 35)
-  
   // FPS text
   ctx.fillStyle = '#00ff00' // Green color for FPS
-  ctx.font = '16px monospace'
+  ctx.font = `${UI_FONT_SIZE_STATS}px monospace`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
-  ctx.fillText(`FPS: ${fps}`, x, y - 20)
+  const fpsText = `FPS: ${fps}`
+  
+  // Measure text width for adaptive background
+  const textMetrics = ctx.measureText(fpsText)
+  const textWidth = textMetrics.width
+  const backgroundWidth = textWidth + 20 // 10px padding on each side
+  const backgroundHeight = 35
+  
+  // Background for better readability (adaptive width)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x - 10, y - 25, backgroundWidth, backgroundHeight)
+  
+  // Reset fill style for text
+  ctx.fillStyle = '#00ff00' // Green color for FPS
+  ctx.fillText(fpsText, x, y - 20)
   
   ctx.restore()
 }
@@ -103,16 +114,26 @@ export const renderTurnCounter = (ctx: CanvasRenderingContext2D, turnNumber: num
   const x = 130 // Right of FPS display
   const y = 40
   
-  // Background for better readability
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-  ctx.fillRect(x - 10, y - 25, 110, 35)
-  
   // Turn counter text
   ctx.fillStyle = '#FFD700' // Gold color for turn counter
-  ctx.font = '16px monospace'
+  ctx.font = `${UI_FONT_SIZE_STATS}px monospace`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
-  ctx.fillText(`Turn: ${turnNumber}`, x, y - 20)
+  const turnText = `Turn: ${turnNumber}`
+  
+  // Measure text width for adaptive background
+  const textMetrics = ctx.measureText(turnText)
+  const textWidth = textMetrics.width
+  const backgroundWidth = textWidth + 20 // 10px padding on each side
+  const backgroundHeight = 35
+  
+  // Background for better readability (adaptive width)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x - 10, y - 25, backgroundWidth, backgroundHeight)
+  
+  // Reset fill style for text
+  ctx.fillStyle = '#FFD700' // Gold color for turn counter
+  ctx.fillText(turnText, x, y - 20)
   
   ctx.restore()
 }
@@ -129,42 +150,28 @@ export const renderEnemyCounter = (ctx: CanvasRenderingContext2D): void => {
   const x = 250 // Right of turn display
   const y = 40
   
-  // Background for better readability
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-  ctx.fillRect(x - 10, y - 25, 120, 35)
-  
   // Enemy counter text
   ctx.fillStyle = '#FF6B6B' // Red color for enemy counter
-  ctx.font = '16px monospace'
+  ctx.font = `${UI_FONT_SIZE_STATS}px monospace`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
-  ctx.fillText(`Enemies: ${enemyCount}`, x, y - 20)
+  const enemyText = `Enemies: ${enemyCount}`
+  
+  // Measure text width for adaptive background
+  const textMetrics = ctx.measureText(enemyText)
+  const textWidth = textMetrics.width
+  const backgroundWidth = textWidth + 20 // 10px padding on each side
+  const backgroundHeight = 35
+  
+  // Background for better readability (adaptive width)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x - 10, y - 25, backgroundWidth, backgroundHeight)
+  
+  // Reset fill style for text
+  ctx.fillStyle = '#FF6B6B' // Red color for enemy counter
+  ctx.fillText(enemyText, x, y - 20)
   
   ctx.restore()
 }
 
-/**
- * Render coin counter display on canvas (next to enemy counter)
- */
-export const renderCoinCounter = (ctx: CanvasRenderingContext2D): void => {
-  const coinCount = getCollectedCoinCount()
-  
-  ctx.save()
-  
-  // Position next to enemy counter
-  const x = 380 // Right of enemy display
-  const y = 40
-  
-  // Background for better readability
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-  ctx.fillRect(x - 10, y - 25, 110, 35)
-  
-  // Coin counter text
-  ctx.fillStyle = '#FFD700' // Gold color for coin counter
-  ctx.font = '16px monospace'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  ctx.fillText(`Coins: ${coinCount}`, x, y - 20)
-  
-  ctx.restore()
-}
+// Coin counter removed - now displayed in inventory section

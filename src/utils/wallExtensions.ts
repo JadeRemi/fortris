@@ -4,6 +4,7 @@ import { getCachedImage } from './imageUtils'
 import { getUnitById } from '../config/allUnitsConfig'
 import { renderEnemyHealthNumbers } from './enemyUtils'
 import { generateUUID } from './uuidUtils'
+import { ROMAN_NUMERALS, UI_FONT_SIZE_HEALTH, UI_FONT_SIZE_TIER } from '../config/gameConfig'
 import {
   LEVEL_HEIGHT,
   LEVEL_WIDTH,
@@ -368,64 +369,113 @@ export const clearAllWallCells = (): void => {
  * Render health numbers on all placed units
  */
 export const renderUnitHealthNumbers = (ctx: CanvasRenderingContext2D): void => {
-  ctx.save()
-  ctx.fillStyle = '#FFFFFF'
-  ctx.strokeStyle = '#000000'
-  ctx.lineWidth = 2
-  ctx.font = '14px "Pixelify Sans", monospace'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'top'
+  // Helper function to render health and tier for a cell
+  const renderHealthAndTier = (cell: WallCell, coords: { x: number, y: number }) => {
+    // Render health number
+    ctx.save()
+    ctx.fillStyle = '#FFFFFF' // White text
+    ctx.strokeStyle = '#000000' // Black outline
+    ctx.lineWidth = 2
+    ctx.font = `${UI_FONT_SIZE_HEALTH}px "Pixelify Sans", monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    
+    // Position health number at the top center of the unit
+    const healthX = coords.x + WALL_CELL_SIZE / 2
+    const healthY = coords.y + 2 // Top of the cell with small offset
+    
+    // Draw stroke first, then fill
+    ctx.strokeText(cell.currentHealth?.toString() || '?', healthX, healthY)
+    ctx.fillText(cell.currentHealth?.toString() || '?', healthX, healthY)
+    ctx.restore()
+    
+    // Render tier indicator (Roman numeral)
+    const unitType = getUnitById(cell.occupiedBy!)
+    if (unitType && unitType.tier && ROMAN_NUMERALS[unitType.tier]) {
+      ctx.save()
+      ctx.fillStyle = '#FFD700' // Gold color for tier
+      ctx.strokeStyle = '#8B4513' // Dark brown outline
+      ctx.lineWidth = 1
+      ctx.font = `${UI_FONT_SIZE_TIER}px "Pixelify Sans", monospace`
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'bottom'
+      
+      // Position tier indicator at bottom-right corner of the cell
+      const tierX = coords.x + WALL_CELL_SIZE - 3 // Right edge minus padding
+      const tierY = coords.y + WALL_CELL_SIZE - 3 // Bottom edge minus padding
+      
+      // Draw stroke first, then fill
+      ctx.strokeText(ROMAN_NUMERALS[unitType.tier], tierX, tierY)
+      ctx.fillText(ROMAN_NUMERALS[unitType.tier], tierX, tierY)
+      ctx.restore()
+    }
+  }
   
-  // Render health on left wall units
+  // Render health and tier on left wall units
   for (let i = 0; i < leftWallCells.length; i++) {
     const cell = leftWallCells[i]
     if (cell.occupiedBy && cell.currentHealth !== undefined) {
       const coords = getWallCellCoordinates('left', i)
       if (coords) {
-        const centerX = coords.x + WALL_CELL_SIZE / 2
-        const topY = coords.y + 2 // Small offset from top
-        
-        // Draw stroke first, then fill
-        ctx.strokeText(cell.currentHealth.toString(), centerX, topY)
-        ctx.fillText(cell.currentHealth.toString(), centerX, topY)
+        renderHealthAndTier(cell, coords)
       }
     }
   }
   
-  // Render health on right wall units
+  // Render health and tier on right wall units
   for (let i = 0; i < rightWallCells.length; i++) {
     const cell = rightWallCells[i]
     if (cell.occupiedBy && cell.currentHealth !== undefined) {
       const coords = getWallCellCoordinates('right', i)
       if (coords) {
-        const centerX = coords.x + WALL_CELL_SIZE / 2
-        const topY = coords.y + 2 // Small offset from top
-        
-        // Draw stroke first, then fill
-        ctx.strokeText(cell.currentHealth.toString(), centerX, topY)
-        ctx.fillText(cell.currentHealth.toString(), centerX, topY)
+        renderHealthAndTier(cell, coords)
       }
     }
   }
   
-  // Render health on bottom wall units
+  // Render health and tier on bottom wall units
   for (let i = 0; i < bottomWallCells.length; i++) {
     const cell = bottomWallCells[i]
     if (cell.occupiedBy && cell.currentHealth !== undefined) {
       const coords = getWallCellCoordinates('bottom', i)
       if (coords) {
-        const centerX = coords.x + WALL_CELL_SIZE / 2
-        const topY = coords.y + 2 // Small offset from top
-        
-        // Draw stroke first, then fill
-        ctx.strokeText(cell.currentHealth.toString(), centerX, topY)
-        ctx.fillText(cell.currentHealth.toString(), centerX, topY)
+        renderHealthAndTier(cell, coords)
       }
     }
   }
   
-  ctx.restore()
-  
   // Also render enemy health numbers
   renderEnemyHealthNumbers(ctx)
+}
+
+/**
+ * Clear all ally units from wall cells
+ */
+export const clearAllWallUnits = (): void => {
+  // Clear left wall
+  leftWallCells.forEach(cell => {
+    cell.isOccupied = false  // THIS WAS MISSING! This is what isWallCellOccupied checks
+    cell.occupiedBy = undefined
+    cell.currentHealth = undefined
+    cell.maxHealth = undefined
+    cell.unitUuid = undefined
+  })
+  
+  // Clear right wall
+  rightWallCells.forEach(cell => {
+    cell.isOccupied = false  // THIS WAS MISSING! This is what isWallCellOccupied checks
+    cell.occupiedBy = undefined
+    cell.currentHealth = undefined
+    cell.maxHealth = undefined
+    cell.unitUuid = undefined
+  })
+  
+  // Clear bottom wall
+  bottomWallCells.forEach(cell => {
+    cell.isOccupied = false  // THIS WAS MISSING! This is what isWallCellOccupied checks
+    cell.occupiedBy = undefined
+    cell.currentHealth = undefined
+    cell.maxHealth = undefined
+    cell.unitUuid = undefined
+  })
 }

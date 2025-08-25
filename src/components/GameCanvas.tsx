@@ -4,15 +4,19 @@ import { createGameLoop } from '../utils/gameLoop'
 import { renderNoiseBackground } from '../utils/noiseUtils'
 import { renderBattlefield } from '../utils/battlefieldUtils'
 import { renderWalls, handleWallHover, isInWall } from '../utils/wallsUtils'
-import { renderControls, renderArmy, handleSwordsmanClick, handleBowmanClick, isPointInAnyUnitCell, renderCursorSprite, handleGlobalClick, tryPlaceUnitOnWall, getSelectionState } from '../utils/controlsUtils'
+import { renderControls, renderArmy, isPointInAnyUnitCell, renderCursorSprite, handleGlobalClick, tryPlaceUnitOnWall, getSelectionState, handleArmyMouseMove, handleArmyClick, getSwordsmanPlusButtonX, getBowmanPlusButtonX, getMonkPlusButtonX } from '../utils/controlsUtils'
+import { isPointInRect } from '../utils/tooltipUtils'
+import { SWORDSMAN_CELL_Y, BOWMAN_CELL_Y, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE } from '../config/gameConfig'
 import { restartGame } from '../utils/gameResetUtils'
-import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex, renderUnitHealthNumbers } from '../utils/wallExtensions'
+import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex, renderUnitHealthNumbers, clearAllWallUnits } from '../utils/wallExtensions'
+import { renderInventory } from '../utils/inventoryUtils'
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
-import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter, renderCoinCounter } from '../utils/fpsUtils'
+import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter } from '../utils/fpsUtils'
 import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, skipTurn } from '../utils/combatUtils'
 import { renderLogs } from '../utils/logsUtils'
+import { renderTooltip } from '../utils/tooltipUtils'
 import { getImagePath } from '../utils/assetUtils'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig'
 import { TEXT_PRIMARY } from '../config/palette'
@@ -57,6 +61,17 @@ const GameCanvas: React.FC = () => {
       'Skip Turn'
     )
   )
+  
+  // Create clear walls button (positioned below skip turn button)
+  const clearWallsButton = useRef<CanvasButton>(
+    createButton(
+      30, // 30px from left edge of controls section
+      290, // Below the skip turn button (220 + 50 + 20 margin)
+      140, // width
+      50,  // height
+      'Clear Walls'
+    )
+  )
 
   // Game state (placeholder for future use)
   // const gameStateRef = useRef({
@@ -96,16 +111,20 @@ const GameCanvas: React.FC = () => {
     // Render placed units in walls
     renderPlacedUnits(ctx)
 
-    // Render army section
-    renderArmy(ctx)
+    // Render army section with mouse position for hover effects
+    renderArmy(ctx, mousePositionRef.current.x, mousePositionRef.current.y)
 
     // Render controls section
     renderControls(ctx)
+
+    // Render inventory section
+    renderInventory(ctx)
 
     // Render canvas buttons
     drawPixelButton(ctx, statsButton.current)
     drawPixelButton(ctx, restartButton.current)
     drawPixelButton(ctx, skipTurnButton.current)
+    drawPixelButton(ctx, clearWallsButton.current)
 
     // Render UI text if font is loaded
     if (fontLoaded) {
@@ -127,16 +146,19 @@ const GameCanvas: React.FC = () => {
     if (statsEnabled) {
       renderTurnCounter(ctx, getCurrentTurn())
       renderEnemyCounter(ctx)
-      renderCoinCounter(ctx)
+
     }
     
-    // Render health numbers on units if stats are enabled
+    // Render health numbers and tier indicators on units if stats are enabled
     if (statsEnabled && fontLoaded) {
       renderUnitHealthNumbers(ctx)
     }
     
     // Render combat logs
     renderLogs(ctx)
+    
+    // Render tooltips (last so they appear on top)
+    renderTooltip(ctx, CANVAS_WIDTH, CANVAS_HEIGHT)
   }, [fontLoaded, statsEnabled]) // Added statsEnabled dependency
 
   // Update button text when statsEnabled changes
@@ -167,7 +189,10 @@ const GameCanvas: React.FC = () => {
         getImagePath('skeleton.png'), // Preload skeleton enemy (no natural spawning)
         getImagePath('serpent.png'), // Preload serpent enemy
         getImagePath('coin.png'), // Preload coin for rewards
-        getImagePath('slash.png') // Preload slash effect for melee attacks
+        getImagePath('slash.png'), // Preload slash effect for melee attacks
+        getImagePath('diamond.png'), // Preload diamond for rewards
+        getImagePath('monk.png'), // Preload monk ally unit
+        getImagePath('spider.png') // Preload spider enemy unit
       ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {
@@ -243,28 +268,40 @@ const GameCanvas: React.FC = () => {
     const wasStatsHovered = statsButton.current.isHovered
     const wasRestartHovered = restartButton.current.isHovered
     const wasSkipTurnHovered = skipTurnButton.current.isHovered
+    const wasClearWallsHovered = clearWallsButton.current.isHovered
     statsButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, statsButton.current)
     restartButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, restartButton.current)
     skipTurnButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, skipTurnButton.current)
+    clearWallsButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)
     
     // Handle wall hover effects
     handleWallHover(canvasCoords.x, canvasCoords.y, renderGame)
     
+    // Handle army tooltips
+    handleArmyMouseMove(canvasCoords.x, canvasCoords.y, renderGame, statsEnabled)
+    
     // Check if hovering over wall cells, buttons, or any unit cell
-    const overButton = statsButton.current.isHovered || restartButton.current.isHovered || skipTurnButton.current.isHovered
+    const overButton = statsButton.current.isHovered || restartButton.current.isHovered || skipTurnButton.current.isHovered || clearWallsButton.current.isHovered
     const overWall = isInWall(canvasCoords.x, canvasCoords.y)
     const overUnit = isPointInAnyUnitCell(canvasCoords.x, canvasCoords.y)
     const selectionState = getSelectionState()
+    
+    // Check if hovering over plus buttons for pointer cursor (only when enabled)
+    const overPlusButton = !selectionState.isUnitSelected && (
+      isPointInRect(canvasCoords.x, canvasCoords.y, getSwordsmanPlusButtonX(), SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE) ||
+      isPointInRect(canvasCoords.x, canvasCoords.y, getBowmanPlusButtonX(), BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE) ||
+      isPointInRect(canvasCoords.x, canvasCoords.y, getMonkPlusButtonX(), MONK_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
+    )
     
     // Set appropriate cursor
     if (selectionState.isUnitSelected) {
       canvas.style.cursor = 'none' // Hide cursor when showing sprite
     } else {
-      canvas.style.cursor = (overButton || overWall || overUnit) ? 'pointer' : 'default'
+      canvas.style.cursor = (overButton || overWall || overUnit || overPlusButton) ? 'pointer' : 'default'
     }
     
     // Request re-render if any button hover state changed
-    if (wasStatsHovered !== statsButton.current.isHovered || wasRestartHovered !== restartButton.current.isHovered || wasSkipTurnHovered !== skipTurnButton.current.isHovered) {
+    if (wasStatsHovered !== statsButton.current.isHovered || wasRestartHovered !== restartButton.current.isHovered || wasSkipTurnHovered !== skipTurnButton.current.isHovered || wasClearWallsHovered !== clearWallsButton.current.isHovered) {
       renderGame()
     }
   }, [scale, renderGame])
@@ -302,11 +339,15 @@ const GameCanvas: React.FC = () => {
       return
     }
     
-    // Check if clicking on unit cells
-    if (handleSwordsmanClick(canvasCoords.x, canvasCoords.y, renderGame)) {
+    // Check if clicking on clear walls button
+    if (isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)) {
+      clearWallsButton.current.isPressed = true
+      renderGame()
       return
     }
-    if (handleBowmanClick(canvasCoords.x, canvasCoords.y, renderGame)) {
+    
+    // Check if clicking on army units or plus buttons
+    if (handleArmyClick(canvasCoords.x, canvasCoords.y, renderGame)) {
       return
     }
 
@@ -387,6 +428,18 @@ const GameCanvas: React.FC = () => {
       if (isPointInButton(canvasCoords.x, canvasCoords.y, skipTurnButton.current)) {
         skipTurn()
         renderGame() // Re-render after skip turn
+      }
+      
+      renderGame()
+    }
+    
+    if (clearWallsButton.current.isPressed) {
+      clearWallsButton.current.isPressed = false
+      
+      // If still over button, trigger click
+      if (isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)) {
+        clearAllWallUnits()
+        renderGame() // Re-render after clearing walls
       }
       
       renderGame()

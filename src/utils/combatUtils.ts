@@ -36,7 +36,9 @@ import { generateUUID } from './uuidUtils'
 import { getImagePath } from './assetUtils'
 import { addPainEffect, cleanupPainEffects } from './painEffectUtils'
 import { spawnCoin, updateCoins, renderCoins, clearCoins } from './coinUtils'
+import { spawnDiamond, updateDiamonds, renderDiamonds, clearDiamonds } from './diamondUtils'
 import { spawnSlashEffect, updateSlashEffects, renderSlashEffects, clearSlashEffects } from './slashUtils'
+import { spawnDamageNumber, updateDamageNumbers, renderDamageNumbers, clearDamageNumbers } from './damageNumberUtils'
 
 // Combat state management
 interface CombatState {
@@ -60,6 +62,8 @@ interface AttackAnimation {
 interface HitAnimation {
   battlefieldCol: number
   battlefieldRow: number
+  enemyWidth: number    // Width of the enemy in cells
+  enemyHeight: number   // Height of the enemy in cells
   startTime: number
   duration: number
   isActive: boolean
@@ -175,7 +179,9 @@ export const stopCombat = () => {
   hitAnimations = []
   projectiles = []
   clearCoins()
+  clearDiamonds()
   clearSlashEffects()
+  clearDamageNumbers()
 }
 
 /**
@@ -190,7 +196,9 @@ export const updateCombat = (deltaTime: number) => {
   updateAnimations(currentTime)
   updateProjectiles(deltaTime, currentTime)
   updateCoins(deltaTime) // Pass deltaTime for coin movement
+  updateDiamonds(deltaTime) // Pass deltaTime for diamond movement
   updateSlashEffects()
+  updateDamageNumbers() // Update flying damage numbers
   
   // Cleanup expired pain effects
   cleanupPainEffects()
@@ -367,10 +375,20 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   // Add pain effect for visual feedback
   addPainEffect(targetEnemy)
   
-  // Add hit animation
+  // Spawn flying damage number
+  spawnDamageNumber(targetEnemy, damage)
+  
+  // Add hit animation scaled to enemy size
+  // Calculate visible portion for partially hidden enemies
+  const visibleStartY = Math.max(targetEnemy.y, 0)
+  const visibleEndY = Math.min(targetEnemy.y + targetEnemy.type.height, LEVEL_HEIGHT)
+  const visibleHeight = Math.max(0, visibleEndY - visibleStartY)
+  
   hitAnimations.push({
-    battlefieldCol: targetCol,
-    battlefieldRow: targetRow,
+    battlefieldCol: targetEnemy.x,
+    battlefieldRow: visibleStartY, // Use actual visible start, not clamped enemy position
+    enemyWidth: targetEnemy.type.width,
+    enemyHeight: visibleHeight, // Use visible height only
     startTime: currentTime,
     duration: HIT_ANIMATION_DURATION_MS,
     isActive: true
@@ -382,9 +400,17 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   
   // Check if enemy should be removed (health <= 0)
   if (targetEnemy.health <= 0) {
-    spawnCoin(targetEnemy) // Spawn coin before removing enemy
+    // Check if enemy drops loot based on their lootChance
+    if (Math.random() <= targetEnemy.type.lootChance) {
+      // 95% chance for gold, 5% chance for diamond
+      if (Math.random() <= 0.95) {
+        spawnCoin(targetEnemy) // Spawn gold coin
+      } else {
+        spawnDiamond(targetEnemy) // Spawn diamond
+      }
+    }
     removeEnemy(targetEnemy)
-    addLogMessage(`${targetEnemy.type.name} is defeated!`)
+    // addLogMessage(`${targetEnemy.type.name} is defeated!`) // Removed - not very useful
   }
 }
 
@@ -484,23 +510,41 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
       // Add pain effect for visual feedback
       addPainEffect(hitEnemy)
       
-      // Add hit animation at enemy position
+      // Spawn flying damage number
+      spawnDamageNumber(hitEnemy, damage)
+      
+      // Add hit animation scaled to enemy size
+      // Calculate visible portion for partially hidden enemies
+      const visibleStartY = Math.max(hitEnemy.y, 0)
+      const visibleEndY = Math.min(hitEnemy.y + hitEnemy.type.height, LEVEL_HEIGHT)
+      const visibleHeight = Math.max(0, visibleEndY - visibleStartY)
+      
       hitAnimations.push({
         battlefieldCol: hitEnemy.x,
-        battlefieldRow: Math.max(hitEnemy.y, 0),
+        battlefieldRow: visibleStartY, // Use actual visible start, not clamped enemy position
+        enemyWidth: hitEnemy.type.width,
+        enemyHeight: visibleHeight, // Use visible height only
         startTime: currentTime,
         duration: HIT_ANIMATION_DURATION_MS,
         isActive: true
       })
       
       // Add combat log
-      addLogMessage(`${hitEnemy.type.name} is hit by Arrow for ${damage} damage`)
+      addLogMessage(`${hitEnemy.type.name} is hit for ${damage} damage`)
       
       // Check if enemy should be removed
       if (hitEnemy.health <= 0) {
-        spawnCoin(hitEnemy) // Spawn coin before removing enemy
+        // Check if enemy drops loot based on their lootChance
+        if (Math.random() <= hitEnemy.type.lootChance) {
+          // 95% chance for gold, 5% chance for diamond
+          if (Math.random() <= 0.95) {
+            spawnCoin(hitEnemy) // Spawn gold coin
+          } else {
+            spawnDiamond(hitEnemy) // Spawn diamond
+          }
+        }
         removeEnemy(hitEnemy)
-        addLogMessage(`${hitEnemy.type.name} is defeated!`)
+        // addLogMessage(`${hitEnemy.type.name} is defeated!`) // Removed - not very useful
       }
       
       // Remove projectile after hit
@@ -569,6 +613,9 @@ export const renderCombatEffects = (ctx: CanvasRenderingContext2D) => {
   renderHitAnimations(ctx)
   renderProjectiles(ctx)
   renderCoins(ctx)
+  renderDiamonds(ctx)
+  // Render flying damage numbers last so they appear on top of everything
+  renderDamageNumbers(ctx)
 }
 
 /**
@@ -608,7 +655,7 @@ const renderAttackAnimations = (ctx: CanvasRenderingContext2D) => {
 }
 
 /**
- * Render hit animations (red borders on struck battlefield cells)
+ * Render hit animations (red borders on struck enemies - scaled to enemy size)
  */
 const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
   const currentTime = Date.now()
@@ -640,20 +687,25 @@ const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
     const lineWidth = 6 // Thick red border
     ctx.lineWidth = lineWidth
     
-    // Draw inner rounded rectangle for hit animation 
-    // Adjust coordinates and size to draw inside the cell
+    // Calculate multi-cell dimensions
+    const totalWidth = anim.enemyWidth * BATTLEFIELD_CELL_SIZE
+    const totalHeight = anim.enemyHeight * BATTLEFIELD_CELL_SIZE
+    
+    // Draw inner rounded rectangle for hit animation scaled to enemy size
+    // Adjust coordinates and size to draw inside the enemy's total area
     const inset = lineWidth / 2 // Move inward by half the line width
     const innerX = coords.x + inset
     const innerY = coords.y + inset
-    const innerSize = BATTLEFIELD_CELL_SIZE - lineWidth
+    const innerWidth = totalWidth - lineWidth
+    const innerHeight = totalHeight - lineWidth
     
     const radius = 4
     ctx.beginPath()
     ctx.moveTo(innerX + radius, innerY)
-    ctx.arcTo(innerX + innerSize, innerY, innerX + innerSize, innerY + innerSize, radius)
-    ctx.arcTo(innerX + innerSize, innerY + innerSize, innerX, innerY + innerSize, radius)
-    ctx.arcTo(innerX, innerY + innerSize, innerX, innerY, radius)
-    ctx.arcTo(innerX, innerY, innerX + innerSize, innerY, radius)
+    ctx.arcTo(innerX + innerWidth, innerY, innerX + innerWidth, innerY + innerHeight, radius)
+    ctx.arcTo(innerX + innerWidth, innerY + innerHeight, innerX, innerY + innerHeight, radius)
+    ctx.arcTo(innerX, innerY + innerHeight, innerX, innerY, radius)
+    ctx.arcTo(innerX, innerY, innerX + innerWidth, innerY, radius)
     ctx.closePath()
     ctx.stroke()
     

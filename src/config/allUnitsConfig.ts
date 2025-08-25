@@ -16,6 +16,7 @@ export interface AllyUnitType {
   assetHeight: number // Asset height in pixels
   maxHealth: number  // Maximum health points
   damage: number     // Damage dealt by this unit
+  tier: number       // Unit tier (1, 2, 3, etc.) - determines Roman numeral display
   spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
   description?: string
 }
@@ -32,7 +33,8 @@ export interface EnemyUnitType {
   health: number     // Note: enemies use 'health', allies use 'maxHealth'
   damage: number     // Damage dealt by this unit
   spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
-  spawnWeight: number // relative probability of spawning (0 = doesn't spawn naturally)
+  spawnChance: number // independent probability of spawning per turn (0 = doesn't spawn naturally)
+  lootChance: number // probability of dropping loot on death (0-1) - 95% gold, 5% diamond
 }
 
 // ============ ALLY UNITS ============
@@ -47,6 +49,7 @@ export const ALLY_UNITS: Record<string, AllyUnitType> = {
     assetHeight: 128,
     maxHealth: 10,
     damage: 2,
+    tier: 1, // Tier 1 unit
     description: 'Small melee unit - takes 1x1 cell'
   },
   
@@ -60,7 +63,23 @@ export const ALLY_UNITS: Record<string, AllyUnitType> = {
     assetHeight: 128,
     maxHealth: 10,
     damage: 1,
+    tier: 1, // Tier 1 unit
     description: 'Small ranged unit - takes 1x1 cell'
+  },
+  
+  MONK: {
+    id: 'monk',
+    name: 'Monk',
+    width: 1,
+    height: 1,
+    imagePath: getImagePath('monk.png'),
+    assetWidth: 128,
+    assetHeight: 128,
+    maxHealth: 10,
+    damage: 1,
+    spriteScale: 1.0,
+    tier: 1, // Tier 1 unit
+    description: 'Balanced support unit - takes 1x1 cell'
   }
 } as const
 
@@ -78,11 +97,12 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     health: 10,
     damage: 1,
     spriteScale: 0.7, // Make skulls appear smaller within their 1x1 cell
-    spawnWeight: 0.45 // 45% spawn chance
+    spawnChance: 0.25, // Reduced from 40% to 25% chance per turn
+    lootChance: 0.10 // 10% chance to drop loot (95% gold, 5% diamond)
   },
   
-  SLIME: {
-    id: 'slime', 
+    SLIME: {
+    id: 'slime',
     name: 'Slime',
     width: 2,
     height: 2,
@@ -91,7 +111,8 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     assetHeight: 128,
     health: 10,
     damage: 1,
-    spawnWeight: 0.25 // 25% spawn chance
+    spawnChance: 0.15, // 15% chance per turn
+    lootChance: 0.30 // 30% chance to drop loot (95% gold, 5% diamond)
   },
   
   SERPENT: {
@@ -104,7 +125,8 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     assetHeight: 64,
     health: 10,
     damage: 1,
-    spawnWeight: 0.15 // 15% spawn chance (moved before Lich for better spawn order)
+    spawnChance: 0.12, // 12% chance per turn
+    lootChance: 0.20 // 20% chance to drop loot (95% gold, 5% diamond) - reasonable default
   },
   
   LICH: {
@@ -117,12 +139,13 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     assetHeight: 128,
     health: 10,
     damage: 1,
-    spawnWeight: 0.10 // 10% spawn chance (reduced from 20%)
+    spawnChance: 0.08, // 8% chance per turn
+    lootChance: 0.50 // 50% chance to drop loot (95% gold, 5% diamond)
   },
   
-  OGRE: {
+    OGRE: {
     id: 'ogre',
-    name: 'Ogre', 
+    name: 'Ogre',
     width: 3,
     height: 3,
     assetPath: getImagePath('ogre.png'),
@@ -130,7 +153,8 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     assetHeight: 128,
     health: 10,
     damage: 1,
-    spawnWeight: 0.05 // 5% spawn chance
+    spawnChance: 0.06, // 6% chance per turn (doubled)
+    lootChance: 1.00 // 100% chance to drop loot (95% gold, 5% diamond)
   },
   
   SKELETON: {
@@ -143,7 +167,37 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     assetHeight: 128,
     health: 10,
     damage: 1,
-    spawnWeight: 0 // Will not spawn naturally - special conditions only (Lich spawning)
+    spawnChance: 0, // Will not spawn naturally - special conditions only (Lich spawning)
+    lootChance: 0.02 // 2% chance to drop loot (95% gold, 5% diamond)
+  },
+  
+  SPIDER_LARGE: {
+    id: 'spider_large',
+    name: 'Large Spider',
+    width: 4,
+    height: 4,
+    assetPath: getImagePath('spider.png'),
+    assetWidth: 128,
+    assetHeight: 128,
+    health: 20,
+    damage: 2,
+    spawnChance: 0.03, // Lower than Ogre (0.06)
+    lootChance: 1.00 // 100% chance to drop loot (95% gold, 5% diamond)
+  },
+  
+  SPIDER_SMALL: {
+    id: 'spider_small',
+    name: 'Small Spider',
+    width: 1,
+    height: 1,
+    assetPath: getImagePath('spider.png'),
+    assetWidth: 128,
+    assetHeight: 128,
+    health: 3,
+    damage: 1,
+    spriteScale: 0.6, // Smaller to differentiate from large spider
+    spawnChance: 0, // Does not spawn naturally - only from Large Spider death
+    lootChance: 0.05 // 5% chance to drop loot (95% gold, 5% diamond)
   }
 } as const
 
@@ -171,28 +225,11 @@ export const getAnyUnitById = (id: string): AllyUnitType | EnemyUnitType | undef
 }
 
 /**
- * Get all naturally spawning enemy units (spawn weight > 0)
+ * Get all naturally spawning enemy units (spawn chance > 0)
  */
 export const getSpawnableEnemyUnits = (): EnemyUnitType[] => {
-  return Object.values(ENEMY_UNITS).filter(unit => unit.spawnWeight > 0)
-}
-
-/**
- * Validate spawn weights add up to 1.0
- */
-export const validateSpawnWeights = (): { isValid: boolean; total: number } => {
-  const spawnableEnemies = getSpawnableEnemyUnits()
-  const total = spawnableEnemies.reduce((sum, enemy) => sum + enemy.spawnWeight, 0)
-  return {
-    isValid: Math.abs(total - 1.0) < 0.001, // Allow tiny floating point differences
-    total
-  }
-}
-
-// Log spawn weight validation on import (for debugging)
-const validation = validateSpawnWeights()
-if (!validation.isValid) {
-  console.warn(`⚠️  Enemy spawn weights total ${validation.total} (should be 1.0)`)
-} else {
-  console.log(`✅ Enemy spawn weights validated: ${validation.total}`)
+  const spawnable = Object.values(ENEMY_UNITS).filter(unit => unit.spawnChance > 0)
+  console.log('🔍 All enemy units:', Object.values(ENEMY_UNITS).map(u => `${u.name} (${u.spawnChance})`))
+  console.log('🎯 Spawnable enemy units:', spawnable.map(u => `${u.name} (${u.spawnChance})`))
+  return spawnable
 }

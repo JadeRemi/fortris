@@ -2,12 +2,12 @@ import { Enemy, EnemyType, BattlefieldCell } from '../types/enemies'
 import { ENEMY_UNITS, getSpawnableEnemyUnits } from '../config/allUnitsConfig'
 import { generateUUID } from './uuidUtils'
 import { renderPainEffect } from './painEffectUtils'
-import { addLogMessage } from './logsUtils'
+// import { addLogMessage } from './logsUtils' // Not used anymore after log cleanup
 import {
   LEVEL_WIDTH,
   LEVEL_HEIGHT,
   LEVEL_NEGATIVE_ROWS,
-  ENEMY_SPAWN_CHANCE,
+  MAX_ENEMY_SPAWNS_PER_TURN,
   LICH_SPAWN_CHANCE,
 
   BATTLEFIELD_X,
@@ -82,33 +82,45 @@ export const isTopRowBlocked = (): boolean => {
   return false
 }
 
-// Roll for enemy spawn
-export const rollEnemySpawn = (): EnemyType | null => {
-  // First roll: should we spawn an enemy this turn?
-  const spawnRoll = Math.random()
-  if (spawnRoll > ENEMY_SPAWN_CHANCE) {
-    return null
+// Roll for independent enemy spawns - each enemy type has its own chance
+export const rollIndependentEnemySpawns = (): EnemyType[] => {
+  // Check if top row is blocked first
+  if (isTopRowBlocked()) {
+    console.log('🚫 Top row blocked, no spawns')
+    return []
   }
   
-  // Check if top row is blocked
-  const topBlocked = isTopRowBlocked()
-  if (topBlocked) {
-    return null
-  }
+  const spawnableEnemies = getSpawnableEnemyUnits()
+  console.log('🎲 Spawnable enemies:', spawnableEnemies.map(e => `${e.name} (${e.spawnChance * 100}%)`))
   
-  // Second roll: which enemy type should spawn based on weights?
-  const typeRoll = Math.random()
-  let cumulativeWeight = 0
+  const eligibleSpawns: EnemyType[] = []
   
-  for (const enemyType of getSpawnableEnemyUnits()) {
-    cumulativeWeight += enemyType.spawnWeight
-    if (typeRoll <= cumulativeWeight) {
-      return enemyType
+  // Roll for each enemy type independently
+  for (const enemyType of spawnableEnemies) {
+    const spawnRoll = Math.random()
+    console.log(`🎯 ${enemyType.name}: rolled ${spawnRoll.toFixed(3)} vs ${enemyType.spawnChance.toFixed(3)}`)
+    if (spawnRoll <= enemyType.spawnChance) {
+      console.log(`✅ ${enemyType.name} eligible for spawn!`)
+      eligibleSpawns.push(enemyType)
     }
   }
   
-  // Fallback to skull if weights don't add up to 1.0
-  return ENEMY_UNITS.SKULL
+  console.log(`📊 Total eligible spawns: ${eligibleSpawns.length}, max allowed: ${MAX_ENEMY_SPAWNS_PER_TURN}`)
+  
+  // Limit to MAX_ENEMY_SPAWNS_PER_TURN
+  const maxSpawns = Math.min(eligibleSpawns.length, MAX_ENEMY_SPAWNS_PER_TURN)
+  
+  // Shuffle and take up to maxSpawns (in case we have more eligible than max)
+  if (eligibleSpawns.length > maxSpawns) {
+    // Shuffle array
+    for (let i = eligibleSpawns.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [eligibleSpawns[i], eligibleSpawns[j]] = [eligibleSpawns[j], eligibleSpawns[i]]
+    }
+    return eligibleSpawns.slice(0, maxSpawns)
+  }
+  
+  return eligibleSpawns
 }
 
 // Find valid spawn position for enemy type
@@ -174,10 +186,13 @@ export const canPlaceEnemyAt = (x: number, y: number, enemyType: EnemyType): boo
 
 // Spawn a new enemy
 export const spawnEnemy = (enemyType: EnemyType): boolean => {
+  console.log(`🐛 Attempting to spawn ${enemyType.name} (${enemyType.width}x${enemyType.height})`)
   const position = findSpawnPosition(enemyType)
   if (!position) {
+    console.log(`❌ No valid position found for ${enemyType.name}`)
     return false
   }
+  console.log(`✅ Spawning ${enemyType.name} at position (${position.x}, ${position.y})`)
   
   const newEnemy: Enemy = {
     id: `${enemyType.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -348,8 +363,7 @@ const tryLichSkeletonSpawn = (lich: Enemy): void => {
     // Mark battlefield cell as occupied
     setBattlefieldCell(randomCell.x, randomCell.y, newSkeleton.id)
     
-    // Add combat log
-    addLogMessage(`Lich summons a Skeleton at (${randomCell.x}, ${randomCell.y})!`)
+    // addLogMessage(`Lich summons a Skeleton at (${randomCell.x}, ${randomCell.y})!`) // Removed - not combat logs
   }
 }
 
@@ -428,8 +442,8 @@ export const renderEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy): void =
     coords.x + offsetX, coords.y + offsetY, scaledWidth, scaledHeight // destination rectangle with centering
   )
   
-  // Apply pain effect overlay if enemy is taking damage (use original dimensions)
-  renderPainEffect(ctx, enemy, coords.x, coords.y, baseWidth, baseHeight)
+  // Apply pain effect overlay if enemy is taking damage
+  renderPainEffect(ctx, enemy, image, 0, srcY, enemy.type.assetWidth, srcHeight, coords.x + offsetX, coords.y + offsetY, scaledWidth, scaledHeight)
   
   ctx.restore()
 }
@@ -498,15 +512,22 @@ export const debugEnemyState = (_context: string): void => {
   // Debug logging disabled
 }
 
-// Process enemy spawning for this turn
+// Process enemy spawning for this turn - independent spawn system
 export const processEnemySpawn = (): void => {
   debugEnemyState('SPAWN_START')
   
-  const enemyType = rollEnemySpawn()
-  if (enemyType) {
+  const enemyTypesToSpawn = rollIndependentEnemySpawns()
+  let successfulSpawns = 0
+  
+  // Try to spawn each selected enemy type
+  for (const enemyType of enemyTypesToSpawn) {
     const spawned = spawnEnemy(enemyType)
     if (spawned) {
-      debugEnemyState('SPAWN_SUCCESS')
+      successfulSpawns++
     }
+  }
+  
+  if (successfulSpawns > 0) {
+    debugEnemyState(`SPAWN_SUCCESS: ${successfulSpawns} enemies spawned`)
   }
 }

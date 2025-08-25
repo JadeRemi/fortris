@@ -81,15 +81,20 @@ export const cleanupPainEffects = (): void => {
 
 /**
  * Render pain effect overlay on an enemy sprite
- * This should be called after the enemy sprite is drawn to add the red overlay
+ * This creates a red tint that only affects the sprite pixels, preserving transparency
  */
 export const renderPainEffect = (
   ctx: CanvasRenderingContext2D, 
   enemy: Enemy, 
-  x: number, 
-  y: number, 
-  width: number, 
-  height: number
+  image: HTMLImageElement,
+  srcX: number,
+  srcY: number, 
+  srcWidth: number,
+  srcHeight: number,
+  destX: number,
+  destY: number,
+  destWidth: number,
+  destHeight: number
 ): void => {
   const intensity = getPainEffectIntensity(enemy)
   if (intensity <= 0) {
@@ -98,15 +103,24 @@ export const renderPainEffect = (
   
   ctx.save()
   
-  // Set up the red overlay with the calculated intensity
-  ctx.globalCompositeOperation = 'multiply' // Blend mode for color overlay
-  ctx.fillStyle = `rgba(255, 0, 0, ${intensity})`
-  ctx.fillRect(x, y, width, height)
+  // Draw the sprite again with a red multiply blend mode
+  // This will only affect the non-transparent pixels of the sprite
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.globalAlpha = intensity
   
-  // Add a subtle glow effect
-  ctx.globalCompositeOperation = 'screen' // Blend mode for glow
-  ctx.fillStyle = `rgba(255, 100, 100, ${intensity * 0.3})`
-  ctx.fillRect(x, y, width, height)
+  // Create a red-tinted version by drawing with red color
+  ctx.fillStyle = '#ff0000' // Pure red
+  ctx.fillRect(destX, destY, destWidth, destHeight)
+  
+  // Restore normal blending but keep the alpha for the next draw
+  ctx.globalCompositeOperation = 'source-atop'
+  
+  // Draw the original sprite again to restore detail while keeping red tint
+  ctx.drawImage(
+    image,
+    srcX, srcY, srcWidth, srcHeight,
+    destX, destY, destWidth, destHeight
+  )
   
   ctx.restore()
 }

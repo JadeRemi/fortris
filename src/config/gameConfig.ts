@@ -88,6 +88,10 @@ export const SWORDSMAN_CELL_Y = ARMY_Y + 80 // Below the army title
 export const BOWMAN_CELL_X = ARMY_X + 30 // Same X as swordsman
 export const BOWMAN_CELL_Y = SWORDSMAN_CELL_Y + ARMY_UNIT_CELL_SIZE + ARMY_UNIT_CELL_SPACING
 
+// Monk cell positioning (below bowman)
+export const MONK_CELL_X = ARMY_X + 30 // Same X as others
+export const MONK_CELL_Y = BOWMAN_CELL_Y + ARMY_UNIT_CELL_SIZE + ARMY_UNIT_CELL_SPACING
+
 // Font settings
 export const GAME_FONT_FAMILY = 'Pixelify Sans'
 export const GAME_FONT_SIZE = 24
@@ -99,20 +103,51 @@ export const NOISE_PIXEL_SIZE = 4
 // Unit configuration
 export const INITIAL_SWORDSMAN_COUNT = 10
 export const INITIAL_BOWMAN_COUNT = 10
+export const INITIAL_MONK_COUNT = 10
 
 // Combat system configuration
 export const TURN_COOLDOWN_MS = 500 // 0.5 seconds between turns
 export const UNIT_ACTION_DELAY_MS = 100 // 0.1 seconds between unit actions
 export const ATTACK_ANIMATION_DURATION_MS = 1000 // 1 second golden border animation
-export const HIT_ANIMATION_DURATION_MS = 1500 // 1.5 seconds red hit animation
+export const HIT_ANIMATION_DURATION_MS = 800 // 0.8 seconds red hit animation (faster)
 export const PROJECTILE_LIFESPAN_MS = 5000 // 5 seconds arrow lifespan
 export const PROJECTILE_SPEED = 400 // pixels per second (2x faster)
 export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
 
-// Enemy configuration
-export const ENEMY_SPAWN_CHANCE = 0.3 // 30% chance to spawn an enemy each turn
+// Enemy spawn configuration - independent spawn system
+export const MIN_ENEMY_SPAWNS_PER_TURN = 0 // Minimum enemies that can spawn per turn
+export const MAX_ENEMY_SPAWNS_PER_TURN = 3 // Maximum enemies that can spawn per turn
+
 export const ENEMY_HEALTH = 10 // Health for all enemies (for now)
 export const LICH_SPAWN_CHANCE = 0.1 // 10% chance for Lich to spawn skeleton when obstructed
 
 // Coin collection configuration
 export const COIN_GRACE_PERIOD_MS = 1000 // 1 second grace period before coins start moving
+
+// Roman numerals for unit tiers (Unicode symbols)
+export const ROMAN_NUMERALS: Record<number, string> = {
+  1: 'Ⅰ',   // U+2160
+  2: 'Ⅱ',   // U+2161
+  3: 'Ⅲ',   // U+2162
+  4: 'Ⅳ',   // U+2163
+  5: 'Ⅴ',   // U+2164
+  6: 'Ⅵ',   // U+2165
+  7: 'Ⅶ',   // U+2166
+  8: 'Ⅷ',   // U+2167
+  9: 'Ⅸ',   // U+2168
+  10: 'Ⅹ'   // U+2169
+}
+
+// UI Font sizes
+export const UI_FONT_SIZE_HEALTH = 16 // Font size for health numbers
+export const UI_FONT_SIZE_TIER = 16 // Font size for tier indicators (same as health)
+export const UI_FONT_SIZE_STATS = 18 // Font size for top-left stats (FPS, turns, etc.) - 2px larger than before
+
+// Army UI configuration
+export const ARMY_BUY_BUTTON_GAP = 20 // Gap between army unit cell and buy button (doubled from 10px)
+
+// Inventory section configuration
+export const INVENTORY_X = ARMY_X + ARMY_WIDTH + 20 // Position to the right of ARMY with same gap as between Controls and Logs
+export const INVENTORY_Y = ARMY_Y // Same Y position as ARMY
+export const INVENTORY_WIDTH = ARMY_WIDTH // Same width as ARMY
+export const INVENTORY_HEIGHT = 400 // Same height as ARMY (400px)

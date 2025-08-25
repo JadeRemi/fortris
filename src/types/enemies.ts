@@ -11,7 +11,8 @@ export interface EnemyType {
   health: number
   damage: number // Damage dealt by this enemy
   spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
-  spawnWeight: number // relative probability of spawning
+  spawnChance: number // independent probability of spawning per turn
+  lootChance: number // probability of dropping loot on death (0-1) - 95% gold, 5% diamond
 }
 
 export interface Enemy {
