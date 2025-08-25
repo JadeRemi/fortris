@@ -112,3 +112,7 @@ export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
 // Enemy configuration
 export const ENEMY_SPAWN_CHANCE = 0.3 // 30% chance to spawn an enemy each turn
 export const ENEMY_HEALTH = 10 // Health for all enemies (for now)
+export const LICH_SPAWN_CHANCE = 0.1 // 10% chance for Lich to spawn skeleton when obstructed
+
+// Coin collection configuration
+export const COIN_GRACE_PERIOD_MS = 1000 // 1 second grace period before coins start moving

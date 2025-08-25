@@ -10,7 +10,7 @@ import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWa
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
-import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter } from '../utils/fpsUtils'
+import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter, renderCoinCounter } from '../utils/fpsUtils'
 import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, skipTurn } from '../utils/combatUtils'
 import { renderLogs } from '../utils/logsUtils'
 import { getImagePath } from '../utils/assetUtils'
@@ -127,6 +127,7 @@ const GameCanvas: React.FC = () => {
     if (statsEnabled) {
       renderTurnCounter(ctx, getCurrentTurn())
       renderEnemyCounter(ctx)
+      renderCoinCounter(ctx)
     }
     
     // Render health numbers on units if stats are enabled

@@ -26,7 +26,7 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     assetWidth: 128,
     assetHeight: 128,
     maxHealth: 10,
-    damage: 6,
+    damage: 2,
     description: 'Small melee unit - takes 1x1 cell'
   },
   BOWMAN: {
@@ -38,7 +38,7 @@ export const UNIT_TYPES: Record<string, UnitType> = {
     assetWidth: 128,
     assetHeight: 128,
     maxHealth: 10,
-    damage: 3,
+    damage: 1,
     description: 'Small ranged unit - takes 1x1 cell'
   }
 } as const

@@ -1,6 +1,7 @@
 // FPS tracking and display utilities
 
 import { enemies } from './enemyUtils'
+import { getCollectedCoinCount } from './coinUtils'
 
 class FPSTracker {
   private frameCount = 0
@@ -138,6 +139,32 @@ export const renderEnemyCounter = (ctx: CanvasRenderingContext2D): void => {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
   ctx.fillText(`Enemies: ${enemyCount}`, x, y - 20)
+  
+  ctx.restore()
+}
+
+/**
+ * Render coin counter display on canvas (next to enemy counter)
+ */
+export const renderCoinCounter = (ctx: CanvasRenderingContext2D): void => {
+  const coinCount = getCollectedCoinCount()
+  
+  ctx.save()
+  
+  // Position next to enemy counter
+  const x = 380 // Right of enemy display
+  const y = 40
+  
+  // Background for better readability
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x - 10, y - 25, 110, 35)
+  
+  // Coin counter text
+  ctx.fillStyle = '#FFD700' // Gold color for coin counter
+  ctx.font = '16px monospace'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText(`Coins: ${coinCount}`, x, y - 20)
   
   ctx.restore()
 }

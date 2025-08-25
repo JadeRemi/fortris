@@ -189,7 +189,7 @@ export const updateCombat = (deltaTime: number) => {
   // Update animations, projectiles, coins, and slash effects
   updateAnimations(currentTime)
   updateProjectiles(deltaTime, currentTime)
-  updateCoins()
+  updateCoins(deltaTime) // Pass deltaTime for coin movement
   updateSlashEffects()
   
   // Cleanup expired pain effects
@@ -314,8 +314,7 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
   })
   
   if (unitType === UNIT_TYPES.SWORDSMAN.id) {
-    // Melee attack: strike adjacent battlefield cell and spawn slash effect
-    spawnSlashEffect(position.wallType, position.cellIndex)
+    // Melee attack: strike adjacent battlefield cell (slash effect spawns only if enemy present)
     performMeleeAttack(position, currentTime)
   } else if (unitType === UNIT_TYPES.BOWMAN.id) {
     // Ranged attack: spawn projectile
@@ -355,6 +354,9 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   if (!targetEnemy) {
     return // Skip this attack - no target
   }
+  
+  // Spawn slash effect since we have a valid target
+  spawnSlashEffect(position.wallType, position.cellIndex)
   
   // Deal damage to the enemy using unit's damage value
   const wallCell = getWallCell(position.wallType, position.cellIndex)

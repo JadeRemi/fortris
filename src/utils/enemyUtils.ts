@@ -8,6 +8,7 @@ import {
   LEVEL_HEIGHT,
   LEVEL_NEGATIVE_ROWS,
   ENEMY_SPAWN_CHANCE,
+  LICH_SPAWN_CHANCE,
 
   BATTLEFIELD_X,
   BATTLEFIELD_Y,
@@ -285,10 +286,7 @@ export const processEnemyTurn = (): void => {
  * Lich is 1x2 (1 wide, 2 tall), so it has 6 adjacent cells
  */
 const tryLichSkeletonSpawn = (lich: Enemy): void => {
-  // Lich spawn chance (configurable)
-  const LICH_SPAWN_CHANCE = 0.3 // 30% chance per turn when obstructed
-  
-  // Roll spawn chance first
+  // Roll spawn chance first (now uses config constant)
   if (Math.random() > LICH_SPAWN_CHANCE) {
     return
   }
