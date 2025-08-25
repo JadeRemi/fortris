@@ -1,7 +1,7 @@
 // Wall extensions for unit placement
 import { WallCell } from '../types/walls'
 import { getCachedImage } from './imageUtils'
-import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
+import { getUnitById } from '../config/allUnitsConfig'
 import { renderEnemyHealthNumbers } from './enemyUtils'
 import { generateUUID } from './uuidUtils'
 import {
@@ -218,7 +218,7 @@ const renderUnitInCell = (ctx: CanvasRenderingContext2D, cellX: number, cellY: n
   ctx.save()
   
   // Get unit configuration
-  const unitType = Object.values(UNIT_TYPES).find(unit => unit.id === unitTypeId)
+  const unitType = getUnitById(unitTypeId)
   if (!unitType) {
     ctx.restore()
     return

@@ -9,7 +9,7 @@ import {
   INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT
 } from '../config/gameConfig'
 import { TEXT_PRIMARY, BATTLEFIELD_CELL_BORDER, BATTLEFIELD_CELL_EMPTY } from '../config/palette'
-import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
+import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { placeUnitOnWall } from './wallExtensions'
 
 // Army unit selection state
@@ -106,14 +106,14 @@ const renderSwordsmanCell = (ctx: CanvasRenderingContext2D) => {
   ctx.strokeRect(SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
   
   // Draw swordsman image (centered in cell) with sprite scaling
-  const spriteScale = UNIT_TYPES.SWORDSMAN.spriteScale || 1.0
+  const spriteScale = ALLY_UNITS.SWORDSMAN.spriteScale || 1.0
   const baseImageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
   const scaledImageSize = baseImageSize * spriteScale
   const imageX = SWORDSMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
   const imageY = SWORDSMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
   
   // Draw image if loaded - semi-transparent when disabled
-  const swordsmanImage = getCachedImage(UNIT_TYPES.SWORDSMAN.imagePath)
+  const swordsmanImage = getCachedImage(ALLY_UNITS.SWORDSMAN.imagePath)
   if (swordsmanImage) {
     // Set opacity - semi-transparent when disabled
     ctx.globalAlpha = swordsmanState.count > 0 ? 1.0 : 0.3
@@ -148,14 +148,14 @@ const renderBowmanCell = (ctx: CanvasRenderingContext2D) => {
   ctx.strokeRect(BOWMAN_CELL_X, BOWMAN_CELL_Y, ARMY_UNIT_CELL_SIZE, ARMY_UNIT_CELL_SIZE)
   
   // Draw bowman image (centered in cell) with sprite scaling  
-  const spriteScale = UNIT_TYPES.BOWMAN.spriteScale || 1.0
+  const spriteScale = ALLY_UNITS.BOWMAN.spriteScale || 1.0
   const baseImageSize = ARMY_UNIT_CELL_SIZE - 8 // Leave some padding
   const scaledImageSize = baseImageSize * spriteScale
   const imageX = BOWMAN_CELL_X + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
   const imageY = BOWMAN_CELL_Y + (ARMY_UNIT_CELL_SIZE - scaledImageSize) / 2
   
   // Draw image if loaded - semi-transparent when disabled
-  const bowmanImage = getCachedImage(UNIT_TYPES.BOWMAN.imagePath)
+  const bowmanImage = getCachedImage(ALLY_UNITS.BOWMAN.imagePath)
   if (bowmanImage) {
     // Set opacity - semi-transparent when disabled
     ctx.globalAlpha = bowmanState.count > 0 ? 1.0 : 0.3
@@ -390,9 +390,9 @@ export const tryPlaceUnitOnWall = (wallType: 'left' | 'right' | 'bottom', cellIn
   
   // Check which unit type is selected and verify count
   let unitState: ArmyUnitState
-  if (globalSelection.selectedUnitType === UNIT_TYPES.SWORDSMAN.id) {
+  if (globalSelection.selectedUnitType === ALLY_UNITS.SWORDSMAN.id) {
     unitState = swordsmanState
-  } else if (globalSelection.selectedUnitType === UNIT_TYPES.BOWMAN.id) {
+  } else if (globalSelection.selectedUnitType === ALLY_UNITS.BOWMAN.id) {
     unitState = bowmanState
   } else {
     return false // Unknown unit type
@@ -474,8 +474,8 @@ export const handleSwordsmanClick = (x: number, y: number, renderCallback: () =>
     // Update global selection state
     if (swordsmanState.isSelected) {
       globalSelection.isUnitSelected = true
-      globalSelection.selectedUnitType = UNIT_TYPES.SWORDSMAN.id
-      globalSelection.cursorSprite = getCachedImage(UNIT_TYPES.SWORDSMAN.imagePath) || null
+      globalSelection.selectedUnitType = ALLY_UNITS.SWORDSMAN.id
+      globalSelection.cursorSprite = getCachedImage(ALLY_UNITS.SWORDSMAN.imagePath) || null
       startSelectionAnimation(renderCallback)
     } else {
       globalSelection.isUnitSelected = false
@@ -519,8 +519,8 @@ export const handleBowmanClick = (x: number, y: number, renderCallback: () => vo
     // Update global selection state
     if (bowmanState.isSelected) {
       globalSelection.isUnitSelected = true
-      globalSelection.selectedUnitType = UNIT_TYPES.BOWMAN.id
-      globalSelection.cursorSprite = getCachedImage(UNIT_TYPES.BOWMAN.imagePath) || null
+      globalSelection.selectedUnitType = ALLY_UNITS.BOWMAN.id
+      globalSelection.cursorSprite = getCachedImage(ALLY_UNITS.BOWMAN.imagePath) || null
       startSelectionAnimation(renderCallback)
     } else {
       globalSelection.isUnitSelected = false

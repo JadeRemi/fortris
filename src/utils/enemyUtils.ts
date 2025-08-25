@@ -1,5 +1,5 @@
 import { Enemy, EnemyType, BattlefieldCell } from '../types/enemies'
-import { ENEMY_TYPES } from '../config/enemiesConfig'
+import { ENEMY_UNITS, getSpawnableEnemyUnits } from '../config/allUnitsConfig'
 import { generateUUID } from './uuidUtils'
 import { renderPainEffect } from './painEffectUtils'
 import { addLogMessage } from './logsUtils'
@@ -68,7 +68,7 @@ export const initializeBattlefield = (): void => {
 
 // Get all available enemy types as array
 export const getEnemyTypes = (): EnemyType[] => {
-  return Object.values(ENEMY_TYPES)
+  return Object.values(ENEMY_UNITS)
 }
 
 // Check if top row has any enemies (even partially)
@@ -100,7 +100,7 @@ export const rollEnemySpawn = (): EnemyType | null => {
   const typeRoll = Math.random()
   let cumulativeWeight = 0
   
-  for (const enemyType of Object.values(ENEMY_TYPES)) {
+  for (const enemyType of getSpawnableEnemyUnits()) {
     cumulativeWeight += enemyType.spawnWeight
     if (typeRoll <= cumulativeWeight) {
       return enemyType
@@ -108,7 +108,7 @@ export const rollEnemySpawn = (): EnemyType | null => {
   }
   
   // Fallback to skull if weights don't add up to 1.0
-  return ENEMY_TYPES.SKULL
+  return ENEMY_UNITS.SKULL
 }
 
 // Find valid spawn position for enemy type
@@ -330,7 +330,7 @@ const tryLichSkeletonSpawn = (lich: Enemy): void => {
   const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)]
   
   // Spawn Skeleton at the chosen location
-  const skeletonType = ENEMY_TYPES.SKELETON
+      const skeletonType = ENEMY_UNITS.SKELETON
   if (canPlaceEnemyAt(randomCell.x, randomCell.y, skeletonType)) {
     const newSkeleton: Enemy = {
       id: `skeleton_lich_spawn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

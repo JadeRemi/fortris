@@ -27,7 +27,7 @@ import {
   PROJECTILE_SIZE_RATIO
 } from '../config/gameConfig'
 import { getWallCell } from './wallExtensions'
-import { UNIT_TYPES, getUnitById } from '../config/unitsConfig'
+import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
 import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder } from './enemyUtils'
 import { battlefieldToCanvas } from './battlefieldUtils'
@@ -313,10 +313,10 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
     isActive: true
   })
   
-  if (unitType === UNIT_TYPES.SWORDSMAN.id) {
+  if (unitType === ALLY_UNITS.SWORDSMAN.id) {
     // Melee attack: strike adjacent battlefield cell (slash effect spawns only if enemy present)
     performMeleeAttack(position, currentTime)
-  } else if (unitType === UNIT_TYPES.BOWMAN.id) {
+  } else if (unitType === ALLY_UNITS.BOWMAN.id) {
     // Ranged attack: spawn projectile
     performRangedAttack(position, currentTime)
   }
@@ -478,7 +478,7 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
     const hitEnemy = checkProjectileEnemyCollision(projectile)
     if (hitEnemy) {
       // Deal damage based on unit type (bowman damage)
-      const damage = UNIT_TYPES.BOWMAN.damage
+      const damage = ALLY_UNITS.BOWMAN.damage
       hitEnemy.health -= damage
       
       // Add pain effect for visual feedback
