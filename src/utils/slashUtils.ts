@@ -105,7 +105,7 @@ export const updateSlashEffects = (): void => {
 }
 
 /**
- * Render all active slash effects
+ * Render all active slash effects with progressive reveal
  */
 export const renderSlashEffects = (ctx: CanvasRenderingContext2D): void => {
   const slashImage = getCachedImage(getImagePath('slash.png'))
@@ -132,11 +132,42 @@ export const renderSlashEffects = (ctx: CanvasRenderingContext2D): void => {
     ctx.rotate(slash.rotation)
     
     if (slashImage) {
-      // Draw the slash image centered and rotated
+      // Calculate reveal progress (0 to 1) - faster reveal than full animation
+      const revealProgress = Math.min(progress * 2, 1) // Reveal happens in first half of animation
+      
       const halfSize = SLASH_RENDER_SIZE / 2
+      
+      // Apply clipping in the already-rotated coordinate system
+      ctx.save()
+      
+      // Create clipping mask - these coordinates are in the rotated space
+      ctx.beginPath()
+      if (slash.rotation === 0) {
+        // Upward slash (from bottom wall) - reveal left to right
+        const revealWidth = SLASH_RENDER_SIZE * revealProgress
+        ctx.rect(-halfSize, -halfSize, revealWidth, SLASH_RENDER_SIZE)
+      } else if (slash.rotation === Math.PI / 2) {
+        // Left wall slash (90° clockwise) - reveal top to bottom
+        // In the rotated coordinate system, top-to-bottom becomes left-to-right
+        const revealWidth = SLASH_RENDER_SIZE * revealProgress
+        ctx.rect(-halfSize, -halfSize, revealWidth, SLASH_RENDER_SIZE)
+      } else if (slash.rotation === -Math.PI / 2) {
+        // Right wall slash (90° counter-clockwise) - reveal bottom to top
+        // In the rotated coordinate system, bottom-to-top becomes right-to-left
+        const revealWidth = SLASH_RENDER_SIZE * revealProgress
+        const startX = halfSize - revealWidth
+        ctx.rect(startX, -halfSize, revealWidth, SLASH_RENDER_SIZE)
+      }
+      ctx.clip()
+      
+      // Draw the slash image centered (already in rotated space)
       drawImage(ctx, slashImage, -halfSize, -halfSize, SLASH_RENDER_SIZE, SLASH_RENDER_SIZE)
+      
+      ctx.restore()
     } else {
-      // Fallback: simple white line if image not loaded
+      // Fallback: simple white line if image not loaded (with reveal effect)
+      const revealProgress = Math.min(progress * 2, 1)
+      
       ctx.strokeStyle = '#FFFFFF'
       ctx.lineWidth = 4
       ctx.lineCap = 'round'
@@ -144,10 +175,20 @@ export const renderSlashEffects = (ctx: CanvasRenderingContext2D): void => {
       const lineLength = SLASH_RENDER_SIZE * 0.8
       const halfLength = lineLength / 2
       
-      ctx.beginPath()
-      ctx.moveTo(0, -halfLength)
-      ctx.lineTo(0, halfLength)
-      ctx.stroke()
+      if (slash.rotation === 0) {
+        // Upward slash - reveal left to right
+        const revealLength = lineLength * revealProgress
+        ctx.beginPath()
+        ctx.moveTo(-halfLength, 0)
+        ctx.lineTo(-halfLength + revealLength, 0)
+        ctx.stroke()
+      } else {
+        // For rotated slashes, draw full line (fallback is simpler)
+        ctx.beginPath()
+        ctx.moveTo(0, -halfLength)
+        ctx.lineTo(0, halfLength * revealProgress * 2 - halfLength)
+        ctx.stroke()
+      }
     }
     
     ctx.restore()

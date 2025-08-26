@@ -8,6 +8,7 @@ import { getCollectedDiamondCount } from './diamondUtils'
 import { getImagePath } from './assetUtils'
 import { renderText } from './fontUtils'
 import { getSelectionState, drawUpgradeSelectionAnimation } from './controlsUtils'
+import { showTooltip } from './tooltipUtils'
 import {
   INVENTORY_X, INVENTORY_Y, INVENTORY_WIDTH, INVENTORY_HEIGHT
 } from '../config/gameConfig'
@@ -41,10 +42,8 @@ export const renderInventory = (ctx: CanvasRenderingContext2D, mouseX: number = 
   // Render diamond row
   renderDiamondRow(ctx)
   
-  // Update canvas cursor for upgrade button
-  if (isPointInUpgradeButton(mouseX, mouseY)) {
-    // This will be handled by the parent component to set cursor style
-  }
+  // Handle upgrade button tooltip
+  handleUpgradeButtonTooltip(mouseX, mouseY)
 }
 
 /**
@@ -222,4 +221,34 @@ export const isPointInUpgradeButton = (x: number, y: number): boolean => {
   
   return x >= buttonX && x <= buttonX + buttonSize &&
          y >= buttonY && y <= buttonY + buttonSize
+}
+
+/**
+ * Handle upgrade button tooltip - shows tooltip when hovering and no selection is active
+ */
+const handleUpgradeButtonTooltip = (mouseX: number, mouseY: number) => {
+  const selectionState = getSelectionState()
+  
+  // Only show tooltip if no unit is selected and not already upgrading
+  if (selectionState.isUnitSelected || selectionState.isUpgradeSelected) {
+    // Don't hide tooltip here - let army tooltips handle it
+    return
+  }
+  
+  // Check if hovering over upgrade button
+  if (isPointInUpgradeButton(mouseX, mouseY)) {
+    const rowY = INVENTORY_Y + 110 // Same as diamond row
+    const buttonSize = 32
+    const gap = 8
+    const buttonX = INVENTORY_X + INVENTORY_WIDTH - buttonSize - gap
+    const buttonY = rowY + 2
+    
+    const centerX = buttonX + buttonSize / 2
+    const centerY = buttonY + buttonSize / 2
+    showTooltip('Upgrade unit', centerX, centerY)
+    return
+  }
+  
+  // If not hovering over upgrade button, don't hide tooltip here
+  // Let the army tooltip system handle hiding when needed
 }

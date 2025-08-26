@@ -84,6 +84,7 @@ interface Projectile {
   lifespan: number
   size: number
   spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
+  unitType: string // Unit type that fired this projectile (for sprite selection and damage)
   isActive: boolean
 }
 
@@ -96,6 +97,9 @@ let combatState: CombatState = {
   lastActionTime: 0,
   turnNumber: 0
 }
+
+// Combat freeze state
+let isCombatFrozen = false
 
 let attackAnimations: AttackAnimation[] = []
 let hitAnimations: HitAnimation[] = []
@@ -207,6 +211,9 @@ export const updateCombat = (deltaTime: number) => {
   
   // Cleanup expired pain effects
   cleanupPainEffects()
+  
+  // Skip turn processing if combat is frozen (but continue animations/projectiles)
+  if (isCombatFrozen) return
   
   // Handle turn phases
   switch (combatState.currentTurnPhase) {
@@ -339,9 +346,9 @@ const processNextUnitAction = (currentTime: number): boolean => {
           combatState.currentUnitIndex++
           continue
         }
-      } else if (wallCell.occupiedBy === ALLY_UNITS.BOWMAN.id) {
+      } else if (wallCell.occupiedBy === ALLY_UNITS.BOWMAN.id || wallCell.occupiedBy === 'lancer') {
         if (!bowmanHasTarget(position)) {
-          // Bowman with no enemies in line of fire - skip without delay or animation
+          // Ranged unit with no enemies in line of fire - skip without delay or animation
           combatState.currentUnitIndex++
           continue
         }
@@ -414,13 +421,13 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
     isActive: true
   })
   
-  if (unitType === ALLY_UNITS.SWORDSMAN.id) {
+  if (unitType === ALLY_UNITS.SWORDSMAN.id || unitType === 'barbarian') {
     // Melee attack: strike adjacent battlefield cell (slash effect spawns only if enemy present)
     performMeleeAttack(position, currentTime)
-  } else if (unitType === ALLY_UNITS.BOWMAN.id) {
+  } else if (unitType === ALLY_UNITS.BOWMAN.id || unitType === 'lancer') {
     // Ranged attack: spawn projectile
-    performRangedAttack(position, currentTime)
-  } else if (unitType === ALLY_UNITS.MONK.id) {
+    performRangedAttack(position, unitType, currentTime)
+  } else if (unitType === ALLY_UNITS.MONK.id || unitType === 'bishop') {
     // Healing: find and heal injured allies on the same wall
     performMonkHealing(position, currentTime)
   }
@@ -491,8 +498,7 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   })
   
   // Add combat log
-  const attackerName = 'Swordsman' // Currently only swordsmen do melee attacks
-  addLogMessage(`${targetEnemy.type.name} is hit by ${attackerName} for ${damage} damage`)
+  addLogMessage(`${targetEnemy.type.name} is hit for ${damage} damage`)
   
   // Check if enemy should be removed (health <= 0)
   if (targetEnemy.health <= 0) {
@@ -664,7 +670,7 @@ const findInjuredAlliesOnWall = (wallType: 'left' | 'right' | 'bottom') => {
 /**
  * Perform ranged attack by spawning projectile
  */
-const performRangedAttack = (position: UnitPosition, currentTime: number) => {
+const performRangedAttack = (position: UnitPosition, unitType: string, currentTime: number) => {
   const wallCoords = getWallCellCoords(position.wallType, position.cellIndex)
   const projectileSize = WALL_CELL_SIZE * PROJECTILE_SIZE_RATIO
   
@@ -692,9 +698,15 @@ const performRangedAttack = (position: UnitPosition, currentTime: number) => {
       break
   }
   
+  // Determine projectile type and sprite based on unit
+  const projectileType = unitType === 'lancer' ? 'spear' : 'arrow'
+  
+  // Adjust projectile size for spears (make them bigger)
+  const adjustedSize = unitType === 'lancer' ? projectileSize * 2.0 : projectileSize
+  
   // Create projectile
   const projectile: Projectile = {
-    id: `arrow_${currentTime}_${Math.random()}`,
+    id: `${projectileType}_${currentTime}_${Math.random()}`,
     uuid: generateUUID(),
     x: startX,
     y: startY,
@@ -703,7 +715,8 @@ const performRangedAttack = (position: UnitPosition, currentTime: number) => {
     speed: PROJECTILE_SPEED,
     startTime: currentTime,
     lifespan: PROJECTILE_LIFESPAN_MS,
-    size: projectileSize,
+    size: adjustedSize,
+    unitType, // Store which unit type fired this projectile
     isActive: true
   }
   
@@ -750,8 +763,13 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
     // Check for collision with enemies
     const hitEnemy = checkProjectileEnemyCollision(projectile)
     if (hitEnemy) {
-      // Deal damage based on unit type (bowman damage)
-      const damage = ALLY_UNITS.BOWMAN.damage
+      // Deal damage based on unit type that fired the projectile
+      let damage = ALLY_UNITS.BOWMAN.damage // Default to bowman damage
+      if (projectile.unitType === 'lancer') {
+        damage = ALLY_UNITS.BOWMAN.damage // Lancer has same damage as bowman base
+      } else if (projectile.unitType === ALLY_UNITS.BOWMAN.id) {
+        damage = ALLY_UNITS.BOWMAN.damage
+      }
       hitEnemy.health -= damage
       
       // Add pain effect for visual feedback
@@ -962,7 +980,7 @@ const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
 }
 
 /**
- * Render projectiles (arrows)
+ * Render projectiles (arrows and spears)
  */
 const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
   projectiles.forEach(projectile => {
@@ -970,9 +988,10 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
     
     ctx.save()
     
-    // Try to get the arrow image
-    const arrowImage = getCachedImage(getImagePath('arrow.png'))
-    if (arrowImage) {
+    // Determine sprite based on unit type that fired the projectile
+    const spriteName = projectile.unitType === 'lancer' ? 'spear.png' : 'arrow.png'
+    const projectileImage = getCachedImage(getImagePath(spriteName))
+    if (projectileImage) {
       // Calculate scaling and size
       const spriteScale = projectile.spriteScale || 1.0
       const scaledSize = projectile.size * spriteScale
@@ -987,7 +1006,7 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
       ctx.translate(projectile.x, projectile.y)
       ctx.rotate(rotation)
       
-      drawImage(ctx, arrowImage, 
+      drawImage(ctx, projectileImage, 
         -scaledSize / 2, 
         -scaledSize / 2,
         scaledSize, 
@@ -998,7 +1017,8 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
       const spriteScale = projectile.spriteScale || 1.0
       const scaledSize = projectile.size * spriteScale
       
-      ctx.fillStyle = '#8B4513' // Brown color for arrow
+      // Fallback colors: brown for arrows, grey for spears
+      ctx.fillStyle = projectile.unitType === 'lancer' ? '#708090' : '#8B4513'
       ctx.fillRect(
         projectile.x - scaledSize / 2,
         projectile.y - scaledSize / 2,
@@ -1016,6 +1036,20 @@ const renderProjectiles = (ctx: CanvasRenderingContext2D) => {
  */
 export const isCombatActive = (): boolean => {
   return combatState.isActive
+}
+
+/**
+ * Toggle freeze state for combat turns (doesn't affect animations/projectiles)
+ */
+export const toggleFreeze = (): void => {
+  isCombatFrozen = !isCombatFrozen
+}
+
+/**
+ * Check if combat is currently frozen
+ */
+export const isFrozen = (): boolean => {
+  return isCombatFrozen
 }
 
 /**

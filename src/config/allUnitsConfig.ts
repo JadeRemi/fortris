@@ -80,6 +80,51 @@ export const ALLY_UNITS: Record<string, AllyUnitType> = {
     spriteScale: 1.0,
     tier: 1, // Tier 1 unit
     description: 'Balanced support unit - takes 1x1 cell'
+  },
+  
+  // ============ TIER 2 UPGRADED UNITS ============
+  // These units are not available in ARMY - only obtained through upgrades
+  
+  LANCER: {
+    id: 'lancer',
+    name: 'Lancer',
+    width: 1,
+    height: 1,
+    imagePath: getImagePath('lancer.png'),
+    assetWidth: 128,
+    assetHeight: 128,
+    maxHealth: 40, // 2x Bowman's health (20 -> 40)
+    damage: 1, // Same damage as Bowman
+    tier: 2, // Tier 2 unit
+    description: 'Upgraded Bowman - enhanced ranged unit'
+  },
+  
+  BARBARIAN: {
+    id: 'barbarian',
+    name: 'Barbarian',
+    width: 1,
+    height: 1,
+    imagePath: getImagePath('barbarian.png'),
+    assetWidth: 128,
+    assetHeight: 128,
+    maxHealth: 80, // 2x Swordsman's health (40 -> 80)
+    damage: 2, // Same damage as Swordsman
+    tier: 2, // Tier 2 unit
+    description: 'Upgraded Swordsman - enhanced melee unit'
+  },
+  
+  BISHOP: {
+    id: 'bishop',
+    name: 'Bishop',
+    width: 1,
+    height: 1,
+    imagePath: getImagePath('bishop.png'),
+    assetWidth: 128,
+    assetHeight: 128,
+    maxHealth: 40, // 2x Monk's health (20 -> 40)
+    damage: 1, // Same damage as Monk
+    tier: 2, // Tier 2 unit
+    description: 'Upgraded Monk - enhanced support unit'
   }
 } as const
 

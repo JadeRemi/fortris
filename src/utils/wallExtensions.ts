@@ -402,7 +402,9 @@ export const renderUnitHealthNumbers = (ctx: CanvasRenderingContext2D): void => 
     const unitType = getUnitById(cell.occupiedBy!)
     if (unitType && unitType.tier && ROMAN_NUMERALS[unitType.tier]) {
       ctx.save()
-      ctx.fillStyle = '#FFD700' // Gold color for tier
+      // Different colors based on tier: Tier 1 = gold, Tier 2 = orange-red
+      const tierColor = unitType.tier === 2 ? '#FF8C00' : '#FFD700' // Orange-red for Tier 2, gold for Tier 1
+      ctx.fillStyle = tierColor
       ctx.strokeStyle = '#8B4513' // Dark brown outline
       ctx.lineWidth = 1
       ctx.font = `${UI_FONT_SIZE_TIER}px "Pixelify Sans", monospace`
@@ -487,4 +489,82 @@ export const clearAllWallUnits = (): void => {
     cell.maxHealth = undefined
     cell.unitUuid = undefined
   })
+}
+
+/**
+ * Upgrade unit mapping - defines which tier 1 units upgrade to which tier 2 units
+ */
+const UNIT_UPGRADE_MAP: Record<string, string> = {
+  'bowman': 'lancer',      // Bowman → Lancer
+  'swordsman': 'barbarian', // Swordsman → Barbarian
+  'monk': 'bishop'         // Monk → Bishop
+}
+
+/**
+ * Upgrade a unit in a wall cell
+ * @param wallType - The wall type (left, right, bottom)
+ * @param cellIndex - The cell index within the wall
+ * @returns true if upgrade was successful, false if upgrade failed or unit not upgradeable
+ */
+export const upgradeWallUnit = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): boolean => {
+  let cells: WallCell[]
+  
+  switch (wallType) {
+    case 'left':
+      cells = leftWallCells
+      break
+    case 'right':
+      cells = rightWallCells
+      break
+    case 'bottom':
+      cells = bottomWallCells
+      break
+  }
+  
+  if (cellIndex < 0 || cellIndex >= cells.length) {
+    return false // Invalid cell index
+  }
+  
+  const cell = cells[cellIndex]
+  if (!cell.isOccupied || !cell.occupiedBy) {
+    return false // Cell is not occupied
+  }
+  
+  // Check if current unit can be upgraded
+  const currentUnitId = cell.occupiedBy
+  const currentUnitType = getUnitById(currentUnitId)
+  
+  // Only tier 1 units can be upgraded
+  if (!currentUnitType || currentUnitType.tier !== 1) {
+    return false // Unit is not tier 1 or unit type not found
+  }
+  
+  const upgradedUnitId = UNIT_UPGRADE_MAP[currentUnitId]
+  
+  if (!upgradedUnitId) {
+    return false // Unit cannot be upgraded (not in upgrade map)
+  }
+  
+  // Get the upgraded unit type to determine new max health
+  const upgradedUnitType = getUnitById(upgradedUnitId)
+  if (!upgradedUnitType) {
+    return false // Upgraded unit type not found
+  }
+  
+  // Preserve current health, but update unit type and max health
+  const currentHealth = cell.currentHealth || 0
+  
+  // Update the cell
+  cell.occupiedBy = upgradedUnitId
+  cell.maxHealth = upgradedUnitType.maxHealth
+  cell.currentHealth = currentHealth // Preserve current health
+  
+  // Add upgrade log message
+  import('./logsUtils').then(({ addLogMessage }) => {
+    addLogMessage(`${currentUnitType.name} is upgraded to ${upgradedUnitType.name}`)
+  })
+  
+  console.log(`🔧 Upgraded ${currentUnitId} → ${upgradedUnitId} (health: ${currentHealth}/${upgradedUnitType.maxHealth})`)
+  
+  return true
 }

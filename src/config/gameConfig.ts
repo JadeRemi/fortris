@@ -141,6 +141,15 @@ export const ROMAN_NUMERALS: Record<number, string> = {
   10: 'Ⅹ'   // U+2169
 }
 
+// Checkmark symbol for completed tasks/challenges
+export const CHECKMARK = '✓'   // U+2713
+
+// Challenge target constants for easy customization
+export const CHALLENGE_TARGETS = {
+  BISHOPS_COUNT: 5, // Target number of bishops for the "Have X Bishops" challenge
+  // Add more challenge targets here as needed
+} as const
+
 // UI Font sizes
 export const UI_FONT_SIZE_HEALTH = 16 // Font size for health numbers
 export const UI_FONT_SIZE_TIER = 16 // Font size for tier indicators (same as health)
@@ -154,3 +163,9 @@ export const INVENTORY_X = ARMY_X + ARMY_WIDTH + 20 // Position to the right of 
 export const INVENTORY_Y = ARMY_Y // Same Y position as ARMY
 export const INVENTORY_WIDTH = ARMY_WIDTH // Same width as ARMY
 export const INVENTORY_HEIGHT = 400 // Same height as ARMY (400px)
+
+// Challenges section configuration
+export const CHALLENGES_X = ARMY_X // Same X position as ARMY (directly below)
+export const CHALLENGES_Y = ARMY_Y + 400 + 30 // Below ARMY with 30px gap (using explicit 400px height)
+export const CHALLENGES_WIDTH = ARMY_WIDTH // Same width as ARMY
+export const CHALLENGES_HEIGHT = 400 // Same height as other sections

@@ -104,25 +104,64 @@ export const renderClawsEffects = (ctx: CanvasRenderingContext2D): void => {
     // Apply opacity
     ctx.globalAlpha = opacity
     
+    // Move to claws position 
+    ctx.translate(claws.x, claws.y)
+    
     if (clawsImage) {
-      // Draw the claws image centered
+      // Calculate reveal progress (0 to 1) - faster reveal than full animation  
+      const revealProgress = Math.min(progress * 2, 1) // Reveal happens in first half of animation
+      
       const halfSize = CLAWS_RENDER_SIZE / 2
-      drawImage(ctx, clawsImage, claws.x - halfSize, claws.y - halfSize, CLAWS_RENDER_SIZE, CLAWS_RENDER_SIZE)
+      
+      // Apply diagonal clipping (bottom left to top right)
+      ctx.save()
+      
+      // Create diagonal clipping mask - always bottom left to top right
+      ctx.beginPath()
+      
+      // Create a simple diagonal reveal using a rotated rectangle
+      // Reveal progresses diagonally from bottom-left to top-right
+      const diagonalLength = CLAWS_RENDER_SIZE * Math.sqrt(2) // Full diagonal length
+      const currentReveal = diagonalLength * revealProgress
+      
+      // Create a rectangle that slides diagonally across the image
+      const rectWidth = CLAWS_RENDER_SIZE * 1.5 // Wide enough to cover the full image
+      const rectHeight = currentReveal // Height grows with progress
+      
+      // Position the rectangle to reveal from bottom-left to top-right
+      // We'll rotate the clipping area 45 degrees counter-clockwise
+      ctx.save()
+      ctx.rotate(-Math.PI / 4) // -45 degrees
+      
+      // Draw the reveal rectangle (in rotated space)
+      const rotatedHalfSize = (CLAWS_RENDER_SIZE * Math.sqrt(2)) / 2
+      ctx.rect(-rectWidth / 2, rotatedHalfSize - rectHeight, rectWidth, rectHeight)
+      
+      ctx.restore() // Restore rotation before clipping
+      
+      ctx.clip()
+      
+      // Draw the claws image centered (already in translated space)
+      drawImage(ctx, clawsImage, -halfSize, -halfSize, CLAWS_RENDER_SIZE, CLAWS_RENDER_SIZE)
+      
+      ctx.restore()
     } else {
-      // Fallback: simple red X if image not loaded
+      // Fallback: simple red X if image not loaded (with reveal effect)
+      const revealProgress = Math.min(progress * 2, 1)
+      
       ctx.strokeStyle = '#FF0000'
       ctx.lineWidth = 4
       ctx.lineCap = 'round'
       
-      const lineLength = CLAWS_RENDER_SIZE * 0.6
+      const lineLength = CLAWS_RENDER_SIZE * 0.6 * revealProgress
       const halfLength = lineLength / 2
       
-      // Draw X pattern
+      // Draw X pattern with reveal
       ctx.beginPath()
-      ctx.moveTo(claws.x - halfLength, claws.y - halfLength)
-      ctx.lineTo(claws.x + halfLength, claws.y + halfLength)
-      ctx.moveTo(claws.x + halfLength, claws.y - halfLength)
-      ctx.lineTo(claws.x - halfLength, claws.y + halfLength)
+      ctx.moveTo(-halfLength, -halfLength)
+      ctx.lineTo(halfLength, halfLength)
+      ctx.moveTo(halfLength, -halfLength)
+      ctx.lineTo(-halfLength, halfLength)
       ctx.stroke()
     }
     

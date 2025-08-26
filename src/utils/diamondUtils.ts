@@ -212,3 +212,10 @@ export const spendDiamond = (): boolean => {
   }
   return false
 }
+
+/**
+ * Add diamonds directly to the collected count (for Max out button)
+ */
+export const addDiamonds = (amount: number): void => {
+  collectedDiamonds += amount
+}

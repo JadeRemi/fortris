@@ -3,14 +3,16 @@ import { calculateCanvasScale, screenToCanvasCoordinates } from '../utils/canvas
 import { createGameLoop } from '../utils/gameLoop'
 import { renderNoiseBackground } from '../utils/noiseUtils'
 import { renderBattlefield } from '../utils/battlefieldUtils'
-import { renderWalls, handleWallHover, isInWall } from '../utils/wallsUtils'
+import { renderWalls, handleWallHover } from '../utils/wallsUtils'
 import { renderControls, renderArmy, isPointInAnyUnitCell, renderCursorSprite, handleGlobalClick, tryPlaceUnitOnWall, getSelectionState, handleArmyMouseMove, handleArmyClick, getSwordsmanPlusButtonX, getBowmanPlusButtonX, getMonkPlusButtonX, selectUpgrade, clearUpgradeSelection } from '../utils/controlsUtils'
 import { isPointInRect } from '../utils/tooltipUtils'
 import { SWORDSMAN_CELL_Y, BOWMAN_CELL_Y, MONK_CELL_Y, ARMY_UNIT_CELL_SIZE } from '../config/gameConfig'
 import { restartGame } from '../utils/gameResetUtils'
-import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex, renderUnitHealthNumbers, clearAllWallUnits } from '../utils/wallExtensions'
+import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex, renderUnitHealthNumbers, clearAllWallUnits, upgradeWallUnit } from '../utils/wallExtensions'
 import { renderInventory, isPointInUpgradeButton } from '../utils/inventoryUtils'
-import { getCollectedDiamondCount, spendDiamond } from '../utils/diamondUtils'
+import { renderChallenges } from '../utils/challengesUtils'
+import { initializeChallenges, updateChallengeProgress } from '../utils/challengeSystem'
+import { getCollectedDiamondCount, spendDiamond, addDiamonds } from '../utils/diamondUtils'
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
@@ -45,7 +47,7 @@ const GameCanvas: React.FC = () => {
   const restartButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
-      142, // Below the stats button (80 + 42 + 20 margin)
+      132, // Below the stats button (80 + 42 + 10 margin) - reduced gap
       140, // width
       42,  // height (reduced from 50 to 42 - thinner)
       'Restart'
@@ -56,7 +58,7 @@ const GameCanvas: React.FC = () => {
   const skipTurnButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
-      204, // Below the restart button (142 + 42 + 20 margin)
+      184, // Below the restart button (132 + 42 + 10 margin) - reduced gap
       140, // width
       42,  // height (reduced from 50 to 42 - thinner)
       'Skip Turn'
@@ -67,10 +69,32 @@ const GameCanvas: React.FC = () => {
   const clearWallsButton = useRef<CanvasButton>(
     createButton(
       30, // 30px from left edge of controls section
-      266, // Below the skip turn button (204 + 42 + 20 margin)
+      236, // Below the skip turn button (184 + 42 + 10 margin) - reduced gap
       140, // width
       42,  // height (reduced from 50 to 42 - thinner)
       'Clear Walls'
+    )
+  )
+  
+  // Create max out button (positioned below clear walls button)
+  const maxOutButton = useRef<CanvasButton>(
+    createButton(
+      30, // 30px from left edge of controls section
+      288, // Below the clear walls button (236 + 42 + 10 margin)
+      140, // width
+      42,  // height (reduced from 50 to 42 - thinner)
+      'Max out'
+    )
+  )
+  
+  // Create freeze button (positioned below max out button)
+  const freezeButton = useRef<CanvasButton>(
+    createButton(
+      30, // 30px from left edge of controls section
+      340, // Below the max out button (288 + 42 + 10 margin)
+      140, // width
+      42,  // height (reduced from 50 to 42 - thinner)
+      'Freeze'
     )
   )
 
@@ -85,6 +109,9 @@ const GameCanvas: React.FC = () => {
     // This runs at fixed timestep (60 FPS)
     updateFPS() // Update FPS tracking
     updateCombat(deltaTime) // Update combat system
+    
+    // Update challenge progress (async, non-blocking)
+    updateChallengeProgress() // Don't await - let it run in background
     
     // Auto-start combat when units are placed
     if (shouldAutoStartCombat()) {
@@ -120,12 +147,17 @@ const GameCanvas: React.FC = () => {
 
     // Render inventory section with mouse position for upgrade button
     renderInventory(ctx, mousePositionRef.current.x, mousePositionRef.current.y)
+    
+    // Render challenges section
+    renderChallenges(ctx)
 
     // Render canvas buttons
     drawPixelButton(ctx, statsButton.current)
     drawPixelButton(ctx, restartButton.current)
     drawPixelButton(ctx, skipTurnButton.current)
     drawPixelButton(ctx, clearWallsButton.current)
+    drawPixelButton(ctx, maxOutButton.current)
+    drawPixelButton(ctx, freezeButton.current)
 
     // Render UI text if font is loaded
     if (fontLoaded) {
@@ -175,27 +207,43 @@ const GameCanvas: React.FC = () => {
     // Set the internal canvas size
     canvas.width = CANVAS_WIDTH
     canvas.height = CANVAS_HEIGHT
+    
+    // Initialize challenge system
+    initializeChallenges()
 
     // Load font and preload images
     Promise.all([
       loadGameFont(),
           preloadImages([
+      // Tier 1 Ally Units
       getImagePath('swordsman.png'),
       getImagePath('bowman.png'),
+      getImagePath('monk.png'), // Preload monk ally unit
+      
+      // Tier 2 Ally Units (Upgrades)
+      getImagePath('barbarian.png'), // Upgraded Swordsman
+      getImagePath('lancer.png'),    // Upgraded Bowman  
+      getImagePath('bishop.png'),    // Upgraded Monk
+      
+      // Projectiles and Effects
       getImagePath('arrow.png'), // Preload arrow for projectiles
+      getImagePath('spear.png'), // Preload spear for future lancer projectiles
+      getImagePath('slash.png'), // Preload slash effect for melee attacks
+      getImagePath('claws.png'), // Preload claws effect for enemy attacks
+      
+      // Enemy Units
       getImagePath('skull.png'), // Preload skull enemy
       getImagePath('slime.png'), // Preload slime enemy
       getImagePath('lich.png'),  // Preload lich enemy
       getImagePath('ogre.png'),  // Preload ogre enemy
       getImagePath('skeleton.png'), // Preload skeleton enemy (no natural spawning)
       getImagePath('serpent.png'), // Preload serpent enemy
+      getImagePath('spider.png'), // Preload spider enemy unit
+      
+      // UI and Rewards
       getImagePath('coin.png'), // Preload coin for rewards
-      getImagePath('slash.png'), // Preload slash effect for melee attacks
-      getImagePath('claws.png'), // Preload claws effect for enemy attacks
       getImagePath('diamond.png'), // Preload diamond for rewards
-      getImagePath('upgrade.png'), // Preload upgrade button icon
-      getImagePath('monk.png'), // Preload monk ally unit
-      getImagePath('spider.png') // Preload spider enemy unit
+      getImagePath('upgrade.png') // Preload upgrade button icon
     ])
     ]).then(() => setFontLoaded(true))
       .catch((error) => {
@@ -276,6 +324,8 @@ const GameCanvas: React.FC = () => {
     restartButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, restartButton.current)
     skipTurnButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, skipTurnButton.current)
     clearWallsButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)
+    maxOutButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, maxOutButton.current)
+    freezeButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)
     
     // Handle wall hover effects
     handleWallHover(canvasCoords.x, canvasCoords.y, renderGame)
@@ -283,9 +333,8 @@ const GameCanvas: React.FC = () => {
     // Handle army tooltips
     handleArmyMouseMove(canvasCoords.x, canvasCoords.y, renderGame, statsEnabled)
     
-    // Check if hovering over wall cells, buttons, or any unit cell
-    const overButton = statsButton.current.isHovered || restartButton.current.isHovered || skipTurnButton.current.isHovered || clearWallsButton.current.isHovered
-    const overWall = isInWall(canvasCoords.x, canvasCoords.y)
+    // Check if hovering over buttons or any unit cell
+    const overButton = statsButton.current.isHovered || restartButton.current.isHovered || skipTurnButton.current.isHovered || clearWallsButton.current.isHovered || maxOutButton.current.isHovered || freezeButton.current.isHovered
     const overUnit = isPointInAnyUnitCell(canvasCoords.x, canvasCoords.y)
     const selectionState = getSelectionState()
     
@@ -303,11 +352,13 @@ const GameCanvas: React.FC = () => {
     if (selectionState.isUnitSelected || selectionState.isUpgradeSelected) {
       canvas.style.cursor = 'none' // Hide cursor when showing sprite
     } else {
-      canvas.style.cursor = (overButton || overWall || overUnit || overPlusButton || overUpgradeButton) ? 'pointer' : 'default'
+      canvas.style.cursor = (overButton || overUnit || overPlusButton || overUpgradeButton) ? 'pointer' : 'default'
     }
     
     // Request re-render if any button hover state changed
-    if (wasStatsHovered !== statsButton.current.isHovered || wasRestartHovered !== restartButton.current.isHovered || wasSkipTurnHovered !== skipTurnButton.current.isHovered || wasClearWallsHovered !== clearWallsButton.current.isHovered) {
+    const wasMaxOutHovered = maxOutButton.current.isHovered
+    const wasFreezeHovered = freezeButton.current.isHovered
+    if (wasStatsHovered !== statsButton.current.isHovered || wasRestartHovered !== restartButton.current.isHovered || wasSkipTurnHovered !== skipTurnButton.current.isHovered || wasClearWallsHovered !== clearWallsButton.current.isHovered || wasMaxOutHovered !== maxOutButton.current.isHovered || wasFreezeHovered !== freezeButton.current.isHovered) {
       renderGame()
     }
   }, [scale, renderGame])
@@ -348,6 +399,20 @@ const GameCanvas: React.FC = () => {
     // Check if clicking on clear walls button
     if (isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)) {
       clearWallsButton.current.isPressed = true
+      renderGame()
+      return
+    }
+    
+    // Check if clicking on max out button
+    if (isPointInButton(canvasCoords.x, canvasCoords.y, maxOutButton.current)) {
+      maxOutButton.current.isPressed = true
+      renderGame()
+      return
+    }
+    
+    // Check if clicking on freeze button
+    if (isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)) {
+      freezeButton.current.isPressed = true
       renderGame()
       return
     }
@@ -415,16 +480,20 @@ const GameCanvas: React.FC = () => {
       // Check left wall
       const leftCellIndex = getLeftWallCellIndex(canvasCoords.x, canvasCoords.y)
       if (leftCellIndex >= 0 && isWallCellOccupied('left', leftCellIndex)) {
-        upgraded = true
-        console.log('🔧 Upgrade applied to left wall unit - functionality coming soon!')
+        upgraded = upgradeWallUnit('left', leftCellIndex)
+        if (!upgraded) {
+          console.log('🚫 Cannot upgrade this unit (already upgraded or invalid)')
+        }
       }
       
       // Check right wall if not upgraded
       if (!upgraded) {
         const rightCellIndex = getRightWallCellIndex(canvasCoords.x, canvasCoords.y)
         if (rightCellIndex >= 0 && isWallCellOccupied('right', rightCellIndex)) {
-          upgraded = true
-          console.log('🔧 Upgrade applied to right wall unit - functionality coming soon!')
+          upgraded = upgradeWallUnit('right', rightCellIndex)
+          if (!upgraded) {
+            console.log('🚫 Cannot upgrade this unit (already upgraded or invalid)')
+          }
         }
       }
       
@@ -432,8 +501,10 @@ const GameCanvas: React.FC = () => {
       if (!upgraded) {
         const bottomCellIndex = getBottomWallCellIndex(canvasCoords.x, canvasCoords.y)
         if (bottomCellIndex >= 0 && isWallCellOccupied('bottom', bottomCellIndex)) {
-          upgraded = true
-          console.log('🔧 Upgrade applied to bottom wall unit - functionality coming soon!')
+          upgraded = upgradeWallUnit('bottom', bottomCellIndex)
+          if (!upgraded) {
+            console.log('🚫 Cannot upgrade this unit (already upgraded or invalid)')
+          }
         }
       }
       
@@ -450,7 +521,7 @@ const GameCanvas: React.FC = () => {
     }
   }, [scale, renderGame])
 
-  const handleMouseUp = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = useCallback(async (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -505,6 +576,38 @@ const GameCanvas: React.FC = () => {
       if (isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)) {
         clearAllWallUnits()
         renderGame() // Re-render after clearing walls
+      }
+      
+      renderGame()
+    }
+    
+    if (maxOutButton.current.isPressed) {
+      maxOutButton.current.isPressed = false
+      
+      // If still over button, trigger click
+      if (isPointInButton(canvasCoords.x, canvasCoords.y, maxOutButton.current)) {
+        // Add 1000 coins and 1000 diamonds
+        const { addCoins } = await import('../utils/coinUtils')
+        addCoins(1000)
+        addDiamonds(1000)
+        console.log('💰 Added 1000 coins and 1000 diamonds')
+        renderGame() // Re-render after adding resources
+      }
+      
+      renderGame()
+    }
+    
+    if (freezeButton.current.isPressed) {
+      freezeButton.current.isPressed = false
+      
+      // If still over button, trigger click
+      if (isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)) {
+        // Toggle freeze state
+        const { toggleFreeze, isFrozen } = await import('../utils/combatUtils')
+        toggleFreeze()
+        const newState = isFrozen() ? 'frozen' : 'resumed'
+        console.log(`❄️ Combat turns ${newState}`)
+        renderGame() // Re-render to update button state
       }
       
       renderGame()

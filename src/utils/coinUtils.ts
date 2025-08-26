@@ -277,3 +277,10 @@ export const getActiveCoinCount = (): number => {
 export const getCollectedCoinCount = (): number => {
   return collectedCoins
 }
+
+/**
+ * Add coins directly to the collected count (for Max out button)
+ */
+export const addCoins = (amount: number): void => {
+  collectedCoins += amount
+}
