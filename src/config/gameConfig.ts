@@ -134,6 +134,14 @@ export const BARBARIAN_DAMAGE_MULTIPLIER = 2 // 2x swordsman damage
 export const BARBARIAN_MAIN_TARGET_MULTIPLIER = 2 // Main target gets 2x barbarian damage
 export const BISHOP_MAX_HEALTH_BOOST = 1 // Amount to increase ally max health
 
+// Lich passive ability constants
+export const LICH_PASSIVE_HEALING = 10 // Amount lich heals when adjacent enemy dies
+export const LICH_PASSIVE_MAX_HEALTH_BOOST = 10 // Amount lich's max health increases when adjacent enemy dies
+
+// Combat log color constants
+export const LOG_COLOR_TIER_2 = '#FF8C00' // Orange-red color for tier 2 unit names in upgrade messages (same as tier 2 roman numeral)
+export const LOG_COLOR_DAMAGE = '#00DC00' // Bright green color for damage amounts in hit messages (same as healing indicators)
+
 // Enemy spawn configuration - independent spawn system
 export const MIN_ENEMY_SPAWNS_PER_TURN = 0 // Minimum enemies that can spawn per turn
 export const MAX_ENEMY_SPAWNS_PER_TURN = 3 // Maximum enemies that can spawn per turn
@@ -168,6 +176,7 @@ export const CHALLENGE_TARGETS = {
   MONKS_BOUGHT: 30, // Target number of monks to buy
   UNITS_REACH_200_HEALTH: 1, // Target number of units reaching 200 health
   SPEAR_MULTIKILLS: 1, // Target number of times killing 5 enemies with 1 spear
+  TURNS_SURVIVED: 300, // Target turn number for survival challenge
   // Add more challenge targets here as needed
 } as const
 

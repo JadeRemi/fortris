@@ -18,7 +18,7 @@ import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
 import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter } from '../utils/fpsUtils'
-import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, skipTurn, toggleFreeze, isFrozen } from '../utils/combatUtils'
+import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, toggleFreeze, isFrozen, toggleSkipTurns, isSkipTurnsActive_export } from '../utils/combatUtils'
 import { renderLogs } from '../utils/logsUtils'
 
 import { renderTooltip, showTooltip, hideTooltip } from '../utils/tooltipUtils'
@@ -205,7 +205,7 @@ const GameCanvas: React.FC = () => {
       184, // Below the restart button (132 + 42 + 10 margin) - reduced gap
       140, // width
       42,  // height (reduced from 50 to 42 - thinner)
-      'Skip Turn'
+      'Skip turns'
     )
   )
   
@@ -363,6 +363,14 @@ const GameCanvas: React.FC = () => {
       const expectedText = currentFreezeState ? 'Unfreeze' : 'Freeze'
       if (freezeButton.current.text !== expectedText) {
         freezeButton.current.text = expectedText
+        renderGame()
+      }
+      
+      // Also update skip turns button text
+      const currentSkipState = isSkipTurnsActive_export()
+      const expectedSkipText = currentSkipState ? 'Resume turns' : 'Skip turns'
+      if (skipTurnButton.current.text !== expectedSkipText) {
+        skipTurnButton.current.text = expectedSkipText
         renderGame()
       }
     }, 100) // Check every 100ms
@@ -756,8 +764,8 @@ const GameCanvas: React.FC = () => {
       
       // If still over button, trigger click
       if (isPointInButton(canvasCoords.x, canvasCoords.y, skipTurnButton.current)) {
-        skipTurn()
-        renderGame() // Re-render after skip turn
+        toggleSkipTurns()
+        renderGame() // Re-render after toggling skip turns
       }
       
       renderGame()

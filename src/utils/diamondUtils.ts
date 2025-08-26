@@ -5,7 +5,7 @@
 import { getImagePath } from './assetUtils'
 import { getCachedImage } from './imageUtils'
 import { generateUUID } from './uuidUtils'
-// Remove the canvasUtils import as we'll handle coordinates differently
+import { getBattlefieldCellCoords } from './enemyUtils'
 
 // Diamond configuration
 const DIAMOND_SCALED_SIZE = 32 // Rendered size on canvas
@@ -65,9 +65,10 @@ export const spawnDiamond = (enemyOrPosition: { x: number, y: number, type?: { w
  * Generate a curved trajectory for diamond movement
  */
 const generateDiamondTrajectory = (startX: number, startY: number): DiamondTrajectory => {
-  // For now, use simple canvas coordinates (diamonds will be implemented later)
-  const canvasX = 100 + startX * 50 // Simple conversion
-  const canvasY = 100 + startY * 50 
+  // Use proper battlefield coordinates for trajectory start point
+  const coords = getBattlefieldCellCoords(startX, Math.max(startY, 0))
+  const canvasX = coords.x
+  const canvasY = coords.y
   const endX = 20 // Top-left corner X
   const endY = 40 // Top-left corner Y
   
@@ -164,9 +165,10 @@ export const renderDiamonds = (ctx: CanvasRenderingContext2D): void => {
       x = position.x
       y = position.y
     } else {
-      // Stationary at spawn position (simple conversion for now)
-      x = 100 + diamond.x * 50
-      y = 100 + diamond.y * 50
+      // Stationary at spawn position (using proper battlefield coordinates)
+      const coords = getBattlefieldCellCoords(diamond.x, Math.max(diamond.y, 0))
+      x = coords.x
+      y = coords.y
     }
     
     // Center the diamond sprite

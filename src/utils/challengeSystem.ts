@@ -4,6 +4,7 @@
 
 import { getWallCell } from './wallExtensions'
 import { CHECKMARK, CHALLENGE_TARGETS } from '../config/gameConfig'
+import { getCurrentTurn } from './combatUtils'
 
 // Challenge data structure
 interface Challenge {
@@ -80,6 +81,16 @@ export const initializeChallenges = (): void => {
       isCompleted: false,
       type: 'simultaneous',
       condition: () => spearMultikills
+    },
+    {
+      id: 'survive_300_turns',
+      name: 'Survivor',
+      description: `Survive ${CHALLENGE_TARGETS.TURNS_SURVIVED} turns`,
+      target: CHALLENGE_TARGETS.TURNS_SURVIVED,
+      current: 0,
+      isCompleted: false,
+      type: 'simultaneous',
+      condition: () => getCurrentTurn()
     }
   ]
 }
@@ -125,7 +136,7 @@ export const updateChallengeProgress = (): void => {
       } else if (challenge.type === 'simultaneous') {
         // For simultaneous: always use current value, can go up or down
         // Exception: for achievement-style challenges, don't decrease once completed
-        if (challenge.id === 'reach_200_health' || challenge.id === 'spear_multikill') {
+        if (challenge.id === 'reach_200_health' || challenge.id === 'spear_multikill' || challenge.id === 'survive_300_turns') {
           // Achievement-style: only increase, never decrease
           if (newProgress > challenge.current) {
             challenge.current = newProgress

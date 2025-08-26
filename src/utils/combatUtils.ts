@@ -49,6 +49,7 @@ import { updateClawsEffects, renderClawsEffects, clearClawsEffects } from './cla
 import { spawnDamageNumber, spawnHealingNumber, spawnMaxHealthBoostNumber, updateDamageNumbers, renderDamageNumbers, clearDamageNumbers } from './damageNumberUtils'
 import { incrementOgreKills, incrementUnitsReached200Health, incrementSpearMultikills } from './challengeSystem'
 import { COMBAT_MESSAGES } from '../config/messages'
+import { LICH_PASSIVE_HEALING, LICH_PASSIVE_MAX_HEALTH_BOOST } from '../config/gameConfig'
 
 // Combat state management
 interface CombatState {
@@ -125,6 +126,9 @@ let combatState: CombatState = {
 
 // Combat freeze state
 let isCombatFrozen = false
+
+// Skip turns mode state
+let isSkipTurnsActive = false
 
 let attackAnimations: AttackAnimation[] = []
 let hitAnimations: HitAnimation[] = []
@@ -248,13 +252,35 @@ export const updateCombat = (deltaTime: number) => {
     case 'waiting':
       // Wait for turn cooldown before starting ally actions
       if (currentTime - combatState.turnStartTime >= TURN_COOLDOWN_MS) {
-        combatState.currentTurnPhase = 'ally-acting'
-        combatState.currentUnitIndex = 0
-        combatState.lastActionTime = currentTime
+        if (isSkipTurnsActive) {
+          // Auto-skip ally turns and go directly to enemy phase
+          combatState.currentTurnPhase = 'enemy-turn'
+          combatState.currentUnitIndex = 0
+          combatState.lastActionTime = currentTime
+          
+          // Process enemy spawning first
+          processEnemySpawn()
+        } else {
+          // Normal ally turn flow
+          combatState.currentTurnPhase = 'ally-acting'
+          combatState.currentUnitIndex = 0
+          combatState.lastActionTime = currentTime
+        }
       }
       break
       
     case 'ally-acting':
+      // Check if skip turns mode is active - if so, skip directly to enemy phase
+      if (isSkipTurnsActive) {
+        combatState.currentTurnPhase = 'enemy-turn'
+        combatState.currentUnitIndex = 0
+        combatState.lastActionTime = currentTime
+        
+        // Process enemy spawning first
+        processEnemySpawn()
+        break
+      }
+      
       // Process ally unit actions with delays
       if (currentTime - combatState.lastActionTime >= UNIT_ACTION_DELAY_MS) {
         const hasMoreUnits = processNextUnitAction(currentTime)
@@ -489,6 +515,81 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
 }
 
 /**
+ * Apply lich passive ability when an enemy dies adjacent to a lich
+ */
+const applyLichPassiveAbility = (dyingEnemy: any) => {
+  // Skip lich passive ability if a skeleton dies (lich shouldn't benefit from its own minions)
+  if (dyingEnemy.type.id === 'skeleton') {
+    return
+  }
+  
+  // Find all lich enemies adjacent to the dying enemy
+  const adjacentLiches = findAdjacentLiches(dyingEnemy)
+  
+  // Apply healing and max health boost to each adjacent lich
+  for (const lich of adjacentLiches) {
+    // Initialize maxHealth if it doesn't exist
+    if (!lich.maxHealth) {
+      lich.maxHealth = lich.type.health
+    }
+    
+    // Increase max health first
+    lich.maxHealth += LICH_PASSIVE_MAX_HEALTH_BOOST
+    
+    // Heal the lich (up to new max health)
+    const oldHealth = lich.health
+    lich.health = Math.min(lich.health + LICH_PASSIVE_HEALING, lich.maxHealth)
+    const actualHealing = lich.health - oldHealth
+    
+    // Calculate lich's center position for visual effects
+    const lichCenterX = lich.x + (lich.type.width - 1) / 2
+    const lichCenterY = lich.y + (lich.type.height - 1) / 2
+    const coords = getBattlefieldCellCoords(lichCenterX, lichCenterY)
+    const visualX = coords.x + (lich.type.width * 40) / 2 // Center of lich
+    const visualY = coords.y - 10 // Above the lich
+    
+    // Show visual indicators if the lich gained health or max health
+    if (actualHealing > 0) {
+      // Show healing number
+      spawnHealingNumber(visualX, visualY, actualHealing)
+    }
+    
+    // Always show max health boost number (slightly offset to avoid overlap)
+    spawnMaxHealthBoostNumber(visualX + 15, visualY, LICH_PASSIVE_MAX_HEALTH_BOOST)
+  }
+}
+
+/**
+ * Find all lich enemies adjacent to the given enemy
+ */
+const findAdjacentLiches = (targetEnemy: any): any[] => {
+  const adjacentLiches: any[] = []
+  
+  // Check all possible adjacent positions around the dying enemy
+  for (let dy = -1; dy <= targetEnemy.type.height; dy++) {
+    for (let dx = -1; dx <= targetEnemy.type.width; dx++) {
+      // Skip the cells occupied by the dying enemy itself
+      if (dy >= 0 && dy < targetEnemy.type.height && dx >= 0 && dx < targetEnemy.type.width) {
+        continue
+      }
+      
+      const checkX = targetEnemy.x + dx
+      const checkY = targetEnemy.y + dy
+      
+      // Find enemy at this position
+      const potentialLich = getEnemyAt(checkX, checkY)
+      
+      // Check if it's a lich and not already in our list
+      if (potentialLich && potentialLich.type.id === 'lich' && !adjacentLiches.some(l => l.uuid === potentialLich.uuid)) {
+        adjacentLiches.push(potentialLich)
+      }
+    }
+  }
+  
+  return adjacentLiches
+}
+
+/**
  * Deal damage to an enemy and handle all associated effects
  */
 const dealDamageToEnemy = (enemy: any, damage: number, currentTime: number) => {
@@ -515,6 +616,9 @@ const dealDamageToEnemy = (enemy: any, damage: number, currentTime: number) => {
   
   // Check if enemy should be removed (health <= 0)
   if (enemy.health <= 0) {
+    // Apply lich passive ability before removing the enemy
+    applyLichPassiveAbility(enemy)
+    
     // Track ogre kills for challenge system
     if (enemy.type.id === 'ogre') {
       incrementOgreKills()
@@ -1058,6 +1162,9 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
         
         // Check if enemy should be removed
         if (hitEnemy.health <= 0) {
+          // Apply lich passive ability before removing the enemy
+          applyLichPassiveAbility(hitEnemy)
+          
           // Track enemy kill for lancer spear multikill challenge
           if (projectile.unitType === 'lancer' && projectile.enemyKillCount !== undefined) {
             projectile.enemyKillCount++
@@ -1616,6 +1723,20 @@ export const toggleFreeze = (): void => {
  */
 export const isFrozen = (): boolean => {
   return isCombatFrozen
+}
+
+/**
+ * Toggle skip turns mode
+ */
+export const toggleSkipTurns = (): void => {
+  isSkipTurnsActive = !isSkipTurnsActive
+}
+
+/**
+ * Check if skip turns mode is active
+ */
+export const isSkipTurnsActive_export = (): boolean => {
+  return isSkipTurnsActive
 }
 
 /**

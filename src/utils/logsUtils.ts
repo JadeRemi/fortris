@@ -44,10 +44,12 @@ export const clearAllLogs = (): void => {
 }
 
 /**
- * Calculate number of lines a message will take when rendered
+ * Calculate number of lines a message will take when rendered (ignoring color tags)
  */
 const calculateLineCount = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): number => {
-  const words = text.split(' ')
+  // Strip color tags for accurate width calculation
+  const cleanText = text.replace(/<color:[^>]*>|<\/color>/g, '')
+  const words = cleanText.split(' ')
   let lineCount = 0
   let line = ''
   
@@ -142,33 +144,124 @@ export const renderLogs = (ctx: CanvasRenderingContext2D): void => {
       message.lineCount = calculateLineCount(ctx, message.text, maxWidth)
     }
     
-    // Word wrap and render the text
-    const words = message.text.split(' ')
-    let line = ''
-    let lineY = cumulativeY
+    // Parse and render text with color support
+    const actualLinesUsed = renderColoredText(ctx, message.text, LOGS_X + 10, cumulativeY, maxWidth, lineHeight, opacity)
     
-    for (const word of words) {
-      const testLine = line + (line ? ' ' : '') + word
-      const metrics = ctx.measureText(testLine)
-      
-      if (metrics.width > maxWidth && line !== '') {
-        // Draw the current line and start a new one
-        ctx.fillText(line, LOGS_X + 10, lineY)
-        line = word
-        lineY += lineHeight
-      } else {
-        line = testLine
-      }
-    }
-    
-    // Draw the final line
-    if (line) {
-      ctx.fillText(line, LOGS_X + 10, lineY)
-    }
-    
-    // Update cumulative Y for next message
-    cumulativeY += message.lineCount * lineHeight
+    // Update cumulative Y for next message using actual lines rendered
+    cumulativeY += actualLinesUsed * lineHeight
   })
   
   ctx.restore()
+}
+
+/**
+ * Render text with color support using <color:#RRGGBB>text</color> format
+ * Returns the actual number of lines used for rendering
+ */
+const renderColoredText = (ctx: CanvasRenderingContext2D, text: string, startX: number, startY: number, maxWidth: number, lineHeight: number, opacity: number): number => {
+  // Parse text segments with their colors
+  const segments = parseColoredText(text)
+  
+  // Check if there's any actual content to render
+  const hasContent = segments.some(segment => segment.text.trim().length > 0)
+  if (!hasContent) {
+    return 0
+  }
+  
+  let currentX = startX
+  let currentY = startY
+  let linesUsed = 1 // Start with 1 line
+  let isFirstSegmentInLine = true
+  
+  for (const segment of segments) {
+    // Skip empty segments
+    if (!segment.text.trim()) {
+      continue
+    }
+    
+    // Set color for this segment
+    if (segment.color) {
+      // Convert hex to rgba with opacity
+      const hex = segment.color.replace('#', '')
+      const r = parseInt(hex.substring(0, 2), 16)
+      const g = parseInt(hex.substring(2, 4), 16)
+      const b = parseInt(hex.substring(4, 6), 16)
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`
+    } else {
+      ctx.fillStyle = `rgba(255, 255, 255, ${opacity})` // Default white
+    }
+    
+    // Word wrap this segment
+    const words = segment.text.split(' ')
+    
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i]
+      
+      // Skip empty words
+      if (!word.trim()) {
+        continue
+      }
+      
+      // Add space before word if not the first word in line
+      const wordWithSpace = !isFirstSegmentInLine && currentX > startX ? ' ' + word : word
+      const wordMetrics = ctx.measureText(wordWithSpace)
+      
+      // Check if word fits on current line
+      if (currentX + wordMetrics.width > startX + maxWidth && currentX > startX) {
+        // Move to next line
+        currentY += lineHeight
+        currentX = startX
+        linesUsed++ // Increment line count
+        isFirstSegmentInLine = true
+        
+        // Draw word without leading space on new line
+        ctx.fillText(word, currentX, currentY)
+        currentX += ctx.measureText(word).width
+      } else {
+        // Draw word on current line
+        ctx.fillText(wordWithSpace, currentX, currentY)
+        currentX += wordMetrics.width
+      }
+      
+      isFirstSegmentInLine = false
+    }
+  }
+  
+  return linesUsed
+}
+
+/**
+ * Parse text with color tags into segments
+ */
+const parseColoredText = (text: string): Array<{text: string, color?: string}> => {
+  const segments: Array<{text: string, color?: string}> = []
+  const colorRegex = /<color:([^>]+)>(.*?)<\/color>/g
+  let lastIndex = 0
+  let match
+  
+  while ((match = colorRegex.exec(text)) !== null) {
+    // Add text before the color tag
+    if (match.index > lastIndex) {
+      segments.push({
+        text: text.substring(lastIndex, match.index)
+      })
+    }
+    
+    // Add colored text
+    segments.push({
+      text: match[2],
+      color: match[1]
+    })
+    
+    lastIndex = colorRegex.lastIndex
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    segments.push({
+      text: text.substring(lastIndex)
+    })
+  }
+  
+  return segments
 }
