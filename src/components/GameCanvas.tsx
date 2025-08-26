@@ -13,13 +13,15 @@ import { renderInventory, isPointInUpgradeButton } from '../utils/inventoryUtils
 import { renderChallenges } from '../utils/challengesUtils'
 import { initializeChallenges, updateChallengeProgress } from '../utils/challengeSystem'
 import { getCollectedDiamondCount, spendDiamond, addDiamonds } from '../utils/diamondUtils'
+import { addCoins } from '../utils/coinUtils'
 import { preloadImages } from '../utils/imageUtils'
 import { loadGameFont, renderText } from '../utils/fontUtils'
 import { drawPixelButton, createButton, isPointInButton, type CanvasButton } from '../utils/canvasButtonUtils'
 import { updateFPS, renderFPS, renderTurnCounter, renderEnemyCounter } from '../utils/fpsUtils'
-import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, skipTurn } from '../utils/combatUtils'
+import { updateCombat, renderCombatEffects, startCombat, getCurrentTurn, shouldAutoStartCombat, skipTurn, toggleFreeze, isFrozen } from '../utils/combatUtils'
 import { renderLogs } from '../utils/logsUtils'
-import { renderTooltip } from '../utils/tooltipUtils'
+
+import { renderTooltip, showTooltip, hideTooltip } from '../utils/tooltipUtils'
 import { getImagePath } from '../utils/assetUtils'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig'
 import { TEXT_PRIMARY } from '../config/palette'
@@ -31,6 +33,149 @@ const GameCanvas: React.FC = () => {
   const [fontLoaded, setFontLoaded] = useState(false)
   const [_mousePos, setMousePos] = useState({ x: 0, y: 0 }) // Throttled mouse position (not directly used)
   const [statsEnabled, setStatsEnabled] = useState(true) // Stats are enabled by default
+  const [isFullscreen, setIsFullscreen] = useState(false) // Track fullscreen state
+
+  // Fullscreen functions
+  const enterFullscreen = async () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    try {
+      await canvas.requestFullscreen()
+      setIsFullscreen(true)
+    } catch (error) {
+      console.error('Error entering fullscreen:', error)
+    }
+  }
+
+  const exitFullscreen = async () => {
+    try {
+      await document.exitFullscreen()
+      setIsFullscreen(false)
+    } catch (error) {
+      console.error('Error exiting fullscreen:', error)
+    }
+  }
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  // Draw absolute positioned button (not relative to controls section)
+  const drawAbsoluteButton = (ctx: CanvasRenderingContext2D, button: CanvasButton) => {
+    const { x, y, width, height, text, isPressed, isHovered } = button
+    
+    // Use same colors as other buttons but smaller styling
+    const borderColor = '#8b7355'
+    const bgColor = isPressed ? '#1f1810' : (isHovered ? '#3a2d20' : '#2d2318')
+    const shadowColor = '#1a1209'
+    const highlightColor = isHovered ? '#5a4635' : '#8b7355'
+    
+    ctx.save()
+    
+    // Draw with border-radius using rounded rectangle
+    const cornerRadius = 6
+    
+    // Helper function for rounded rectangle
+    const drawRoundedRect = (x: number, y: number, width: number, height: number, radius: number) => {
+      ctx.beginPath()
+      ctx.moveTo(x + radius, y)
+      ctx.arcTo(x + width, y, x + width, y + height, radius)
+      ctx.arcTo(x + width, y + height, x, y + height, radius)
+      ctx.arcTo(x, y + height, x, y, radius)
+      ctx.arcTo(x, y, x + width, y, radius)
+      ctx.closePath()
+    }
+    
+    // Draw outer border/highlight
+    ctx.fillStyle = highlightColor
+    drawRoundedRect(x, y, width, height, cornerRadius)
+    ctx.fill()
+    
+    // Draw main border
+    ctx.fillStyle = borderColor
+    drawRoundedRect(x + 1, y + 1, width - 2, height - 2, cornerRadius - 1)
+    ctx.fill()
+    
+    // Draw main button background
+    const inset = isPressed ? 2 : 1
+    ctx.fillStyle = bgColor
+    drawRoundedRect(x + inset, y + inset, width - inset * 2, height - inset * 2, cornerRadius - inset)
+    ctx.fill()
+    
+    // Draw text
+    const textX = x + width / 2 + (isPressed ? 1 : 0)
+    const textY = y + height / 2 + (isPressed ? 1 : 0)
+    renderText(ctx, text, textX, textY, TEXT_PRIMARY, 14) // Slightly larger font for square button
+    
+    ctx.restore()
+  }
+
+  // Check if point is in absolute positioned button
+  const isPointInAbsoluteButton = (x: number, y: number, button: CanvasButton): boolean => {
+    return x >= button.x && 
+           x <= button.x + button.width && 
+           y >= button.y && 
+           y <= button.y + button.height
+  }
+
+  // Enhanced coordinate conversion that handles fullscreen mode with letterboxing
+  const screenToCanvasCoordinatesEnhanced = (screenX: number, screenY: number, canvasRect: DOMRect, scale: number) => {
+    if (isFullscreen) {
+      // In fullscreen mode, we need to account for letterboxing
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      
+      // Calculate the aspect ratios
+      const canvasAspectRatio = CANVAS_WIDTH / CANVAS_HEIGHT
+      const viewportAspectRatio = viewportWidth / viewportHeight
+      
+      let actualCanvasWidth, actualCanvasHeight, offsetX, offsetY
+      
+      if (viewportAspectRatio > canvasAspectRatio) {
+        // Viewport is wider than canvas aspect ratio - vertical letterboxing (black bars on sides)
+        actualCanvasHeight = viewportHeight
+        actualCanvasWidth = actualCanvasHeight * canvasAspectRatio
+        offsetX = (viewportWidth - actualCanvasWidth) / 2
+        offsetY = 0
+      } else {
+        // Viewport is taller than canvas aspect ratio - horizontal letterboxing (black bars on top/bottom)  
+        actualCanvasWidth = viewportWidth
+        actualCanvasHeight = actualCanvasWidth / canvasAspectRatio
+        offsetX = 0
+        offsetY = (viewportHeight - actualCanvasHeight) / 2
+      }
+      
+      // Calculate the scale factor for fullscreen
+      const fullscreenScale = actualCanvasWidth / CANVAS_WIDTH
+      
+      // Adjust coordinates for letterboxing offset and scale
+      return {
+        x: (screenX - offsetX) / fullscreenScale,
+        y: (screenY - offsetY) / fullscreenScale
+      }
+    } else {
+      // Use normal coordinate conversion for windowed mode
+      return screenToCanvasCoordinates(screenX, screenY, canvasRect, scale)
+    }
+  }
+
+  // Create fullscreen button (positioned absolutely in top-right corner)
+  const fullscreenButton = useRef<CanvasButton>(
+    createButton(
+      CANVAS_WIDTH - 50, // 50px from right edge (absolute positioning)
+      10, // 10px from top edge (absolute positioning)
+      40, // square button
+      40, // square button
+      '⛶' // fullscreen icon symbol
+    )
+  )
 
     // Create stats button (positioned in controls section)
   const statsButton = useRef<CanvasButton>(
@@ -158,6 +303,9 @@ const GameCanvas: React.FC = () => {
     drawPixelButton(ctx, clearWallsButton.current)
     drawPixelButton(ctx, maxOutButton.current)
     drawPixelButton(ctx, freezeButton.current)
+    
+    // Render fullscreen button (absolute positioned)
+    drawAbsoluteButton(ctx, fullscreenButton.current)
 
     // Render UI text if font is loaded
     if (fontLoaded) {
@@ -198,6 +346,30 @@ const GameCanvas: React.FC = () => {
   useEffect(() => {
     statsButton.current.text = statsEnabled ? 'Hide Stats' : 'Show Stats'
   }, [statsEnabled])
+
+  // Update fullscreen button text when fullscreen state changes
+  useEffect(() => {
+    fullscreenButton.current.text = isFullscreen ? '⊟' : '⛶' // Exit vs Enter fullscreen symbols
+  }, [isFullscreen])
+
+  // Update freeze button text when freeze state changes
+  useEffect(() => {
+    freezeButton.current.text = isFrozen() ? 'Unfreeze' : 'Freeze'
+  }, []) // We'll need to trigger this when freeze state changes
+
+  // Re-render when freeze state changes to update button text
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentFreezeState = isFrozen()
+      const expectedText = currentFreezeState ? 'Unfreeze' : 'Freeze'
+      if (freezeButton.current.text !== expectedText) {
+        freezeButton.current.text = expectedText
+        renderGame()
+      }
+    }, 100) // Check every 100ms
+
+    return () => clearInterval(interval)
+  }, [renderGame])
 
   // Initialize canvas and game loop
   useEffect(() => {
@@ -298,7 +470,7 @@ const GameCanvas: React.FC = () => {
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    const canvasCoords = screenToCanvasCoordinates(
+    const canvasCoords = screenToCanvasCoordinatesEnhanced(
       event.clientX,
       event.clientY,
       rect,
@@ -320,12 +492,15 @@ const GameCanvas: React.FC = () => {
     const wasRestartHovered = restartButton.current.isHovered
     const wasSkipTurnHovered = skipTurnButton.current.isHovered
     const wasClearWallsHovered = clearWallsButton.current.isHovered
+    const wasFullscreenHovered = fullscreenButton.current.isHovered
+    
     statsButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, statsButton.current)
     restartButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, restartButton.current)
     skipTurnButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, skipTurnButton.current)
     clearWallsButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, clearWallsButton.current)
     maxOutButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, maxOutButton.current)
     freezeButton.current.isHovered = isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)
+    fullscreenButton.current.isHovered = isPointInAbsoluteButton(canvasCoords.x, canvasCoords.y, fullscreenButton.current)
     
     // Handle wall hover effects
     handleWallHover(canvasCoords.x, canvasCoords.y, renderGame)
@@ -333,10 +508,21 @@ const GameCanvas: React.FC = () => {
     // Handle army tooltips
     handleArmyMouseMove(canvasCoords.x, canvasCoords.y, renderGame, statsEnabled)
     
-    // Check if hovering over buttons or any unit cell
-    const overButton = statsButton.current.isHovered || restartButton.current.isHovered || skipTurnButton.current.isHovered || clearWallsButton.current.isHovered || maxOutButton.current.isHovered || freezeButton.current.isHovered
-    const overUnit = isPointInAnyUnitCell(canvasCoords.x, canvasCoords.y)
+    // Handle fullscreen button tooltip (only show when stats enabled and no unit selected)
     const selectionState = getSelectionState()
+    if (statsEnabled && !selectionState.isUnitSelected && fullscreenButton.current.isHovered) {
+      const tooltipX = fullscreenButton.current.x + fullscreenButton.current.width / 2
+      const tooltipY = fullscreenButton.current.y + fullscreenButton.current.height + 5 // Below button
+      const tooltipText = isFullscreen ? 'Exit fullscreen mode' : 'Fullscreen mode'
+      showTooltip(tooltipText, tooltipX, tooltipY)
+    } else if (fullscreenButton.current.isHovered) {
+      // If hovering but conditions not met, hide tooltip
+      hideTooltip()
+    }
+    
+    // Check if hovering over buttons or any unit cell
+    const overButton = statsButton.current.isHovered || restartButton.current.isHovered || skipTurnButton.current.isHovered || clearWallsButton.current.isHovered || maxOutButton.current.isHovered || freezeButton.current.isHovered || fullscreenButton.current.isHovered
+    const overUnit = isPointInAnyUnitCell(canvasCoords.x, canvasCoords.y)
     
     // Check if hovering over plus buttons for pointer cursor (only when enabled)  
     const overPlusButton = !selectionState.isAnySelected && (
@@ -358,17 +544,17 @@ const GameCanvas: React.FC = () => {
     // Request re-render if any button hover state changed
     const wasMaxOutHovered = maxOutButton.current.isHovered
     const wasFreezeHovered = freezeButton.current.isHovered
-    if (wasStatsHovered !== statsButton.current.isHovered || wasRestartHovered !== restartButton.current.isHovered || wasSkipTurnHovered !== skipTurnButton.current.isHovered || wasClearWallsHovered !== clearWallsButton.current.isHovered || wasMaxOutHovered !== maxOutButton.current.isHovered || wasFreezeHovered !== freezeButton.current.isHovered) {
+    if (wasStatsHovered !== statsButton.current.isHovered || wasRestartHovered !== restartButton.current.isHovered || wasSkipTurnHovered !== skipTurnButton.current.isHovered || wasClearWallsHovered !== clearWallsButton.current.isHovered || wasMaxOutHovered !== maxOutButton.current.isHovered || wasFreezeHovered !== freezeButton.current.isHovered || wasFullscreenHovered !== fullscreenButton.current.isHovered) {
       renderGame()
     }
-  }, [scale, renderGame])
+  }, [scale, renderGame, isFullscreen])
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    const canvasCoords = screenToCanvasCoordinates(
+    const canvasCoords = screenToCanvasCoordinatesEnhanced(
       event.clientX,
       event.clientY,
       rect,
@@ -413,6 +599,13 @@ const GameCanvas: React.FC = () => {
     // Check if clicking on freeze button
     if (isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)) {
       freezeButton.current.isPressed = true
+      renderGame()
+      return
+    }
+    
+    // Check if clicking on fullscreen button
+    if (isPointInAbsoluteButton(canvasCoords.x, canvasCoords.y, fullscreenButton.current)) {
+      fullscreenButton.current.isPressed = true
       renderGame()
       return
     }
@@ -519,14 +712,14 @@ const GameCanvas: React.FC = () => {
       renderGame()
       return
     }
-  }, [scale, renderGame])
+  }, [scale, renderGame, isFullscreen])
 
   const handleMouseUp = useCallback(async (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    const canvasCoords = screenToCanvasCoordinates(
+    const canvasCoords = screenToCanvasCoordinatesEnhanced(
       event.clientX,
       event.clientY,
       rect,
@@ -587,7 +780,6 @@ const GameCanvas: React.FC = () => {
       // If still over button, trigger click
       if (isPointInButton(canvasCoords.x, canvasCoords.y, maxOutButton.current)) {
         // Add 1000 coins and 1000 diamonds
-        const { addCoins } = await import('../utils/coinUtils')
         addCoins(1000)
         addDiamonds(1000)
         console.log('💰 Added 1000 coins and 1000 diamonds')
@@ -603,7 +795,6 @@ const GameCanvas: React.FC = () => {
       // If still over button, trigger click
       if (isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)) {
         // Toggle freeze state
-        const { toggleFreeze, isFrozen } = await import('../utils/combatUtils')
         toggleFreeze()
         const newState = isFrozen() ? 'frozen' : 'resumed'
         console.log(`❄️ Combat turns ${newState}`)
@@ -612,7 +803,22 @@ const GameCanvas: React.FC = () => {
       
       renderGame()
     }
-  }, [scale, renderGame])
+    
+    if (fullscreenButton.current.isPressed) {
+      fullscreenButton.current.isPressed = false
+      
+      // If still over button, trigger click
+      if (isPointInAbsoluteButton(canvasCoords.x, canvasCoords.y, fullscreenButton.current)) {
+        if (isFullscreen) {
+          exitFullscreen()
+        } else {
+          enterFullscreen()
+        }
+      }
+      
+      renderGame()
+    }
+  }, [scale, renderGame, isFullscreen, enterFullscreen, exitFullscreen])
 
   return (
     <canvas
@@ -626,6 +832,19 @@ const GameCanvas: React.FC = () => {
         maxWidth: '100vw',
         maxHeight: '100vh',
         border: '2px solid #444',
+        // Fullscreen styles - preserve aspect ratio with letterboxing
+        ...(isFullscreen && {
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 9999,
+          backgroundColor: '#000000', // Black letterbox background
+          maxWidth: '100vw',
+          maxHeight: '100vh',
+          objectFit: 'contain', // This ensures aspect ratio is preserved
+          border: 'none', // Remove border in fullscreen
+        }),
       }}
     />
   )
