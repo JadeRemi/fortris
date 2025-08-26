@@ -254,8 +254,8 @@ const GameCanvas: React.FC = () => {
     updateFPS() // Update FPS tracking
     updateCombat(deltaTime) // Update combat system
     
-    // Update challenge progress (async, non-blocking)
-    updateChallengeProgress() // Don't await - let it run in background
+    // Update challenge progress (synchronous to prevent flickering)
+    updateChallengeProgress()
     
     // Auto-start combat when units are placed
     if (shouldAutoStartCombat()) {

@@ -3,13 +3,16 @@
  */
 
 import { drawSectionHeader } from './uiSectionUtils'
-import { getChallenges, formatChallengeText, getChallengeTextColor } from './challengeSystem'
+import { getChallenges, formatChallengeText, getChallengeTextColor, updateChallengeProgress } from './challengeSystem'
 import { CHALLENGES_X, CHALLENGES_Y, CHALLENGES_WIDTH, CHALLENGES_HEIGHT } from '../config/gameConfig'
 
 /**
  * Render the challenges section
  */
 export const renderChallenges = (ctx: CanvasRenderingContext2D) => {
+  // Update challenge progress synchronously to prevent flickering
+  updateChallengeProgress()
+  
   // Draw section header using reusable styling
   drawSectionHeader(
     ctx, 

@@ -105,10 +105,10 @@ const countUnitsOnWalls = (unitType: string): number => {
 }
 
 /**
- * Update challenge progress (async, non-blocking)
- * This is called from gameplay without await
+ * Update challenge progress (synchronous)
+ * This ensures consistent state when rendering
  */
-export const updateChallengeProgress = async (): Promise<void> => {
+export const updateChallengeProgress = (): void => {
   try {
     for (const challenge of challenges) {
       if (challenge.isCompleted) continue
