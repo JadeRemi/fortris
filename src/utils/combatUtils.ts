@@ -376,11 +376,12 @@ const bowmanHasTarget = (position: UnitPosition): boolean => {
 }
 
 /**
- * Check if a monk has injured allies to heal on the same wall
+ * Check if a monk has injured allies to heal on the same wall (excluding itself)
  */
 const monkHasHealingTarget = (position: UnitPosition): boolean => {
-  const injuredAllies = findInjuredAlliesOnWall(position.wallType)
-  return injuredAllies.length > 0
+  // Use the same logic as actual healing to find targets (excludes the healer itself)
+  const targetAlly = findClosestInjuredAlly(position, false) // Same wall only, excludes self
+  return targetAlly !== null
 }
 
 /**
@@ -970,52 +971,6 @@ const findInjuredAlliesAtRange = (healerPosition: UnitPosition, range: number) =
   }
   
   return injuredAtRange
-}
-
-/**
- * Find all injured allies on a specific wall (used by skip logic)
- */
-const findInjuredAlliesOnWall = (wallType: 'left' | 'right' | 'bottom') => {
-  const injuredAllies: Array<{
-    wallType: 'left' | 'right' | 'bottom',
-    cellIndex: number,
-    wallCell: any,
-    currentHealth: number,
-    maxHealth: number
-  }> = []
-  
-  // Get the appropriate wall cells based on wall type
-  let wallCells: any[]
-  let maxCells: number
-  
-  if (wallType === 'left') {
-    wallCells = leftWallCells
-    maxCells = leftWallCells.length
-  } else if (wallType === 'right') {
-    wallCells = rightWallCells
-    maxCells = rightWallCells.length
-  } else {
-    wallCells = bottomWallCells
-    maxCells = bottomWallCells.length
-  }
-  
-  // Check each cell for injured allies
-  for (let i = 0; i < maxCells; i++) {
-    const cell = wallCells[i]
-    if (cell && cell.isOccupied && cell.currentHealth !== undefined && cell.maxHealth !== undefined) {
-      if (cell.currentHealth < cell.maxHealth) {
-        injuredAllies.push({
-          wallType,
-          cellIndex: i,
-          wallCell: cell,
-          currentHealth: cell.currentHealth,
-          maxHealth: cell.maxHealth
-        })
-      }
-    }
-  }
-  
-  return injuredAllies
 }
 
 /**

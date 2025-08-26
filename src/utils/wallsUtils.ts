@@ -22,7 +22,8 @@ import {
   BATTLEFIELD_CELL_EMPTY
 } from '../config/palette'
 import { getSelectionState } from './controlsUtils'
-import { isWallCellOccupied } from './wallExtensions'
+import { isWallCellOccupied, getWallCell } from './wallExtensions'
+import { getUnitById } from '../config/allUnitsConfig'
 
 // Hover state for wall cells
 interface WallCellHover {
@@ -260,9 +261,11 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
     if (cellIndex !== -1) {
       // Show hover effect based on selection type:
       // - Unit selected: only unoccupied cells
-      // - Upgrade selected: only occupied cells
+      // - Upgrade selected: only tier 1 (upgradeable) units
       const isOccupied = isWallCellOccupied('left', cellIndex)
-      const shouldShowHover = selectionState.isUnitSelected ? !isOccupied : isOccupied
+      const shouldShowHover = selectionState.isUnitSelected 
+        ? !isOccupied 
+        : isWallCellUpgradeable('left', cellIndex)
       if (shouldShowHover) {
         let hoverState = wallHoverStates.find(h => h.wall === 'left' && h.cellIndex === cellIndex)
         if (!hoverState) {
@@ -292,9 +295,11 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
     if (cellIndex !== -1) {
       // Show hover effect based on selection type:
       // - Unit selected: only unoccupied cells
-      // - Upgrade selected: only occupied cells
+      // - Upgrade selected: only tier 1 (upgradeable) units
       const isOccupied = isWallCellOccupied('right', cellIndex)
-      const shouldShowHover = selectionState.isUnitSelected ? !isOccupied : isOccupied
+      const shouldShowHover = selectionState.isUnitSelected 
+        ? !isOccupied 
+        : isWallCellUpgradeable('right', cellIndex)
       if (shouldShowHover) {
         let hoverState = wallHoverStates.find(h => h.wall === 'right' && h.cellIndex === cellIndex)
         if (!hoverState) {
@@ -324,9 +329,11 @@ export const handleWallHover = (x: number, y: number, _renderCallback: () => voi
     if (cellIndex !== -1) {
       // Show hover effect based on selection type:
       // - Unit selected: only unoccupied cells
-      // - Upgrade selected: only occupied cells
+      // - Upgrade selected: only tier 1 (upgradeable) units
       const isOccupied = isWallCellOccupied('bottom', cellIndex)
-      const shouldShowHover = selectionState.isUnitSelected ? !isOccupied : isOccupied
+      const shouldShowHover = selectionState.isUnitSelected 
+        ? !isOccupied 
+        : isWallCellUpgradeable('bottom', cellIndex)
       if (shouldShowHover) {
         let hoverState = wallHoverStates.find(h => h.wall === 'bottom' && h.cellIndex === cellIndex)
         if (!hoverState) {
@@ -481,4 +488,17 @@ const getBottomWallCellIndex = (x: number, y: number): number => {
   }
   
   return -1
+}
+
+/**
+ * Check if a wall cell contains a tier 1 unit (upgradeable)
+ */
+const isWallCellUpgradeable = (wallType: 'left' | 'right' | 'bottom', cellIndex: number): boolean => {
+  const cell = getWallCell(wallType, cellIndex)
+  if (!cell || !cell.isOccupied || !cell.occupiedBy) {
+    return false
+  }
+  
+  const unitType = getUnitById(cell.occupiedBy)
+  return unitType?.tier === 1
 }

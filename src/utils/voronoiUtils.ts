@@ -1,5 +1,5 @@
-import { NOISE_COLORS } from '../config/palette'
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig'
+import { NOISE_COLORS, GRASS_COLORS } from '../config/palette'
+import { CANVAS_WIDTH, CANVAS_HEIGHT, BATTLEFIELD_X, BATTLEFIELD_Y, BATTLEFIELD_TOTAL_WIDTH, BATTLEFIELD_TOTAL_HEIGHT } from '../config/gameConfig'
 
 interface VoronoiPoint {
   x: number
@@ -34,9 +34,9 @@ const distance = (x1: number, y1: number, x2: number, y2: number): number => {
 }
 
 /**
- * Generate Voronoi points with seeded randomness
+ * Generate Voronoi points with seeded randomness and palette selection
  */
-const generateVoronoiPoints = (count: number, width: number, height: number, seed: number): VoronoiPoint[] => {
+const generateVoronoiPoints = (count: number, width: number, height: number, seed: number, colorPalette: readonly string[]): VoronoiPoint[] => {
   const rng = new SeededRandom(seed)
   const points: VoronoiPoint[] = []
 
@@ -44,7 +44,7 @@ const generateVoronoiPoints = (count: number, width: number, height: number, see
     points.push({
       x: rng.next() * width,
       y: rng.next() * height,
-      colorIndex: Math.floor(rng.next() * NOISE_COLORS.length)
+      colorIndex: Math.floor(rng.next() * colorPalette.length)
     })
   }
 
@@ -70,7 +70,7 @@ const findClosestPoint = (x: number, y: number, points: VoronoiPoint[]): Voronoi
 }
 
 /**
- * Generate deterministic pixelated Voronoi noise pattern
+ * Generate deterministic pixelated Voronoi noise pattern with multi-palette support
  */
 export const generateVoronoiNoise = (seed: number = 42): ImageData => {
   const canvas = document.createElement('canvas')
@@ -78,9 +78,14 @@ export const generateVoronoiNoise = (seed: number = 42): ImageData => {
   canvas.width = CANVAS_WIDTH
   canvas.height = CANVAS_HEIGHT
 
-  // Generate Voronoi points (30-50x more for smaller cells)
-  const pointCount = 4000 // Much higher density for smaller cells
-  const points = generateVoronoiPoints(pointCount, CANVAS_WIDTH, CANVAS_HEIGHT, seed)
+  // Generate separate point sets for each palette region for better distribution
+  const pointCount = 2000 // Reduced per region but we'll have multiple regions
+  
+  // Generate points for grass area (battlefield)
+  const grassPoints = generateVoronoiPoints(pointCount, CANVAS_WIDTH, CANVAS_HEIGHT, seed, GRASS_COLORS)
+  
+  // Generate points for general area (rest of canvas)
+  const generalPoints = generateVoronoiPoints(pointCount, CANVAS_WIDTH, CANVAS_HEIGHT, seed + 1000, NOISE_COLORS)
 
   // Create image data
   const imageData = ctx.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT)
@@ -89,15 +94,31 @@ export const generateVoronoiNoise = (seed: number = 42): ImageData => {
   // Pixelation settings
   const pixelSize = 8 // Larger size for stronger pixelation effect
 
-  // Generate pixelated Voronoi pattern
+  // Generate pixelated Voronoi pattern with region-based palettes
   for (let y = 0; y < CANVAS_HEIGHT; y += pixelSize) {
     for (let x = 0; x < CANVAS_WIDTH; x += pixelSize) {
       // Sample the center of each pixel block
       const sampleX = Math.min(x + Math.floor(pixelSize / 2), CANVAS_WIDTH - 1)
       const sampleY = Math.min(y + Math.floor(pixelSize / 2), CANVAS_HEIGHT - 1)
       
-      const closest = findClosestPoint(sampleX, sampleY, points)
-      const color = NOISE_COLORS[closest.colorIndex]
+      // Determine which palette and points to use based on position
+      let closest: VoronoiPoint
+      let colorPalette: readonly string[]
+      
+      if (sampleX >= BATTLEFIELD_X && 
+          sampleX < BATTLEFIELD_X + BATTLEFIELD_TOTAL_WIDTH &&
+          sampleY >= BATTLEFIELD_Y && 
+          sampleY < BATTLEFIELD_Y + BATTLEFIELD_TOTAL_HEIGHT) {
+        // Use grass colors and grass-specific points for battlefield
+        closest = findClosestPoint(sampleX, sampleY, grassPoints)
+        colorPalette = GRASS_COLORS
+      } else {
+        // Use regular colors and general points for other areas
+        closest = findClosestPoint(sampleX, sampleY, generalPoints)
+        colorPalette = NOISE_COLORS
+      }
+      
+      const color = colorPalette[closest.colorIndex]
       
       // Convert hex color to RGB
       const r = parseInt(color.slice(1, 3), 16)
@@ -136,10 +157,20 @@ export const getVoronoiNoisePattern = (seed: number = 42): ImageData => {
 }
 
 /**
- * Clear cached noise pattern (for regeneration with different seed)
+ * Clear cached noise pattern (for regeneration with different seed or palette changes)
  */
 export const clearNoiseCache = (): void => {
   cachedNoisePattern = null
+}
+
+/**
+ * Force regeneration of noise pattern with multi-palette support
+ * This will clear the cache and generate a new pattern on next render
+ */
+export const regenerateNoisePattern = (seed: number = 42): void => {
+  clearNoiseCache()
+  // Pre-generate new pattern
+  cachedNoisePattern = generateVoronoiNoise(seed)
 }
 
 // Clear cache to apply new pixelation settings

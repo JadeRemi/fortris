@@ -56,6 +56,18 @@ export const NOISE_COLORS = [
   '#0f0500',       // extremely dark variant
 ] as const
 
+// Grass palette for battlefield background (dark green tones)
+export const GRASS_COLORS = [
+  '#0d1a0f',       // very dark forest green
+  '#101c12',       // dark mossy green
+  '#0a1508',       // darkest green
+  '#0f1b0d',       // deep forest
+  '#121f15',       // dark sage
+  '#081204',       // almost black green
+  '#0b1609',       // dark olive green
+  '#061003',       // extremely dark variant
+] as const
+
 // Text colors
 export const TEXT_PRIMARY = OFF_WHITE
 export const TEXT_SECONDARY = LIGHT_GREY
@@ -109,4 +121,8 @@ export const PALETTE = {
   TEXT_PRIMARY,
   TEXT_SECONDARY,
   TEXT_ACCENT,
+  
+  // Noise Arrays
+  NOISE_COLORS,
+  GRASS_COLORS,
 } as const
