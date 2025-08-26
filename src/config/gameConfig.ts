@@ -117,6 +117,9 @@ export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
 // Healing configuration
 export const MONK_HEALING_AMOUNT = 2 // Amount of health monks restore per heal
 
+// Enemy projectile configuration
+export const ICICLE_DAMAGE = 4 // Damage dealt by enemy icicle projectiles
+
 // Enemy spawn configuration - independent spawn system
 export const MIN_ENEMY_SPAWNS_PER_TURN = 0 // Minimum enemies that can spawn per turn
 export const MAX_ENEMY_SPAWNS_PER_TURN = 3 // Maximum enemies that can spawn per turn

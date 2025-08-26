@@ -202,6 +202,20 @@ export const ENEMY_UNITS: Record<string, EnemyUnitType> = {
     lootChance: 1.00 // 100% chance to drop loot (95% gold, 5% diamond)
   },
   
+  ICE_GOLEM: {
+    id: 'icegolem',
+    name: 'Ice Golem',
+    width: 2,
+    height: 3,
+    assetPath: getImagePath('icegolem.png'),
+    assetWidth: 128,
+    assetHeight: 192,
+    health: 10,
+    damage: 1,
+    spawnChance: 0.04, // 4% chance per turn (rare and powerful)
+    lootChance: 0.75 // 75% chance to drop loot (95% gold, 5% diamond)
+  },
+
   SKELETON: {
     id: 'skeleton',
     name: 'Skeleton',

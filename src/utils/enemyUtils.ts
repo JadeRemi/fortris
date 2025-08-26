@@ -151,6 +151,11 @@ export const findSpawnPosition = (enemyType: EnemyType): { x: number; y: number 
 
 // Check if enemy can be placed at specific position
 export const canPlaceEnemyAt = (x: number, y: number, enemyType: EnemyType): boolean => {
+  return canPlaceEnemyAtExcluding(x, y, enemyType, null)
+}
+
+// Check if enemy can be placed at specific position, excluding a specific enemy ID
+const canPlaceEnemyAtExcluding = (x: number, y: number, enemyType: EnemyType, excludeEnemyId: string | null): boolean => {
   // Check bounds - allow negative Y coordinates but ensure the enemy extends into visible area
   if (x < 0 || x + enemyType.width > LEVEL_WIDTH) {
     return false
@@ -166,13 +171,13 @@ export const canPlaceEnemyAt = (x: number, y: number, enemyType: EnemyType): boo
     return false
   }
   
-  // Check for collision with existing enemies
+  // Check for collision with existing enemies (excluding the specified enemy)
   for (let dy = 0; dy < enemyType.height; dy++) {
     for (let dx = 0; dx < enemyType.width; dx++) {
       const checkX = x + dx
       const checkY = y + dy
       const cell = getBattlefieldCell(checkX, checkY)
-      if (cell && cell.enemyId) {
+      if (cell && cell.enemyId && cell.enemyId !== excludeEnemyId) {
         return false
       }
     }
@@ -280,13 +285,18 @@ export const processEnemyTurn = (): void => {
     // Try to move first
     const moved = moveEnemyDown(enemy)
     
-    // If enemy couldn't move, try to attack adjacent allies
+    // If enemy couldn't move down, try pathfinding
     if (!moved) {
-      tryEnemyAttack(enemy)
+      const movedLaterally = tryPathfindingMovement(enemy)
       
-      // Check if Lich couldn't move and try to spawn Skeleton (existing behavior)
-      if (enemy.type.id === 'lich') {
-        tryLichSkeletonSpawn(enemy)
+      // If pathfinding didn't work either, try to attack adjacent allies
+      if (!movedLaterally) {
+        tryEnemyAttack(enemy)
+        
+        // Check if Lich couldn't move and try to spawn Skeleton (existing behavior)
+        if (enemy.type.id === 'lich') {
+          tryLichSkeletonSpawn(enemy)
+        }
       }
     }
     
@@ -294,6 +304,133 @@ export const processEnemyTurn = (): void => {
   }
   
   debugEnemyState('MOVE_END')
+}
+
+/**
+ * Try pathfinding movement when direct downward movement is blocked
+ */
+const tryPathfindingMovement = (enemy: Enemy): boolean => {
+  // Check if there are any available spots in the row below
+  const availableSpots = findAvailableSpotsBelow(enemy)
+  
+  if (availableSpots.length === 0) {
+    return false // No spots available below, can't use pathfinding
+  }
+  
+  // Find the best reachable spot
+  const bestPath = findBestPath(enemy, availableSpots)
+  
+  if (!bestPath) {
+    return false // No reachable spots
+  }
+  
+  // Execute one step of the path (move left or right by 1 cell)
+  return executeLateralMovement(enemy, bestPath.direction)
+}
+
+/**
+ * Find available spots in the row below where this enemy could fit
+ */
+const findAvailableSpotsBelow = (enemy: Enemy): Array<{x: number, y: number}> => {
+  const availableSpots: Array<{x: number, y: number}> = []
+  const targetY = enemy.y + 1
+  
+  // Check if target row is valid
+  if (targetY + enemy.type.height > LEVEL_HEIGHT) {
+    return [] // Would go out of bounds
+  }
+  
+  // Check each possible X position in the row below
+  for (let x = 0; x <= LEVEL_WIDTH - enemy.type.width; x++) {
+    if (canPlaceEnemyAtExcluding(x, targetY, enemy.type, enemy.id)) {
+      availableSpots.push({x, y: targetY})
+    }
+  }
+  
+  return availableSpots
+}
+
+/**
+ * Find the best path to reach available spots
+ */
+const findBestPath = (enemy: Enemy, availableSpots: Array<{x: number, y: number}>): {direction: 'left' | 'right', targetX: number, distance: number} | null => {
+  let bestPath: {direction: 'left' | 'right', targetX: number, distance: number} | null = null
+  let shortestDistance = Infinity
+  
+  for (const spot of availableSpots) {
+    // Calculate distance and direction to reach this spot
+    const distance = Math.abs(spot.x - enemy.x)
+    const direction: 'left' | 'right' = spot.x < enemy.x ? 'left' : 'right'
+    
+    // Skip if spot is at current X position (shouldn't happen since we can't move down)
+    if (distance === 0) continue
+    
+    // Check if the ENTIRE path is clear for lateral movement
+    if (isLateralPathClear(enemy, direction, distance)) { // Check the full distance
+      if (distance < shortestDistance) {
+        shortestDistance = distance
+        bestPath = {direction, targetX: spot.x, distance}
+      }
+    }
+  }
+  
+  return bestPath
+}
+
+/**
+ * Check if enemy can move laterally (left or right) for the full distance
+ */
+const isLateralPathClear = (enemy: Enemy, direction: 'left' | 'right', steps: number): boolean => {
+  const deltaX = direction === 'left' ? -1 : 1
+  
+  // Check each step of the path
+  for (let step = 1; step <= steps; step++) {
+    const newX = enemy.x + (deltaX * step)
+    
+    // Check bounds
+    if (newX < 0 || newX + enemy.type.width > LEVEL_WIDTH) {
+      return false
+    }
+    
+    // Check if this intermediate position is clear (excluding the enemy doing the checking)
+    if (!canPlaceEnemyAtExcluding(newX, enemy.y, enemy.type, enemy.id)) {
+      return false
+    }
+  }
+  
+  return true // All steps in the path are clear
+}
+
+/**
+ * Execute one step of lateral movement
+ */
+const executeLateralMovement = (enemy: Enemy, direction: 'left' | 'right'): boolean => {
+  const deltaX = direction === 'left' ? -1 : 1
+  const newX = enemy.x + deltaX
+  
+  // Double-check the move is valid (excluding the enemy itself)
+  if (!canPlaceEnemyAtExcluding(newX, enemy.y, enemy.type, enemy.id)) {
+    return false
+  }
+  
+  // Clear old position in battlefield cells
+  for (let dy = 0; dy < enemy.type.height; dy++) {
+    for (let dx = 0; dx < enemy.type.width; dx++) {
+      setBattlefieldCell(enemy.x + dx, enemy.y + dy, undefined)
+    }
+  }
+  
+  // Move enemy
+  enemy.x = newX
+  
+  // Mark new position in battlefield cells
+  for (let dy = 0; dy < enemy.type.height; dy++) {
+    for (let dx = 0; dx < enemy.type.width; dx++) {
+      setBattlefieldCell(enemy.x + dx, enemy.y + dy, enemy.id)
+    }
+  }
+  
+  return true
 }
 
 /**
@@ -422,7 +559,7 @@ const findAdjacentAllies = (enemy: Enemy): Array<{wallType: 'left' | 'right' | '
 /**
  * Deal damage to an ally and handle death
  */
-const damageAlly = (wallType: 'left' | 'right' | 'bottom', cellIndex: number, damage: number, _attacker: Enemy): void => {
+export const damageAlly = (wallType: 'left' | 'right' | 'bottom', cellIndex: number, damage: number, _attacker: Enemy | null): void => {
   const wallCell = getWallCell(wallType, cellIndex)
   if (!wallCell || !wallCell.isOccupied || !wallCell.occupiedBy) {
     return

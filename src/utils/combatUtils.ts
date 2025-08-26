@@ -26,12 +26,13 @@ import {
   PROJECTILE_SPEED,
   PROJECTILE_SIZE_RATIO,
   MONK_HEALING_AMOUNT,
-  BATTLEFIELD_CELL_BORDER_WIDTH
+  BATTLEFIELD_CELL_BORDER_WIDTH,
+  ICICLE_DAMAGE
 } from '../config/gameConfig'
 import { getWallCell, leftWallCells, rightWallCells, bottomWallCells } from './wallExtensions'
 import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
-import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder } from './enemyUtils'
+import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder, damageAlly } from './enemyUtils'
 import { battlefieldToCanvas } from './battlefieldUtils'
 import { addLogMessage } from './logsUtils'
 import { generateUUID } from './uuidUtils'
@@ -88,6 +89,23 @@ interface Projectile {
   isActive: boolean
 }
 
+interface EnemyProjectile {
+  id: string
+  uuid: string
+  x: number
+  y: number
+  directionX: number
+  directionY: number
+  speed: number
+  startTime: number
+  lifespan: number
+  size: number
+  spriteScale?: number
+  projectileType: string // Type of enemy projectile (e.g., 'icicle')
+  damage: number
+  isActive: boolean
+}
+
 // Global combat state
 let combatState: CombatState = {
   isActive: false,
@@ -104,6 +122,7 @@ let isCombatFrozen = false
 let attackAnimations: AttackAnimation[] = []
 let hitAnimations: HitAnimation[] = []
 let projectiles: Projectile[] = []
+let enemyProjectiles: EnemyProjectile[] = []
 
 // Unit action order: left wall (top to bottom), bottom wall (left to right), right wall (bottom to top)
 interface UnitPosition {
@@ -185,6 +204,7 @@ export const stopCombat = () => {
   attackAnimations = []
   hitAnimations = []
   projectiles = []
+  enemyProjectiles = []
   clearCoins()
   clearDiamonds()
   clearSlashEffects()
@@ -203,6 +223,7 @@ export const updateCombat = (deltaTime: number) => {
   // Update animations, projectiles, coins, and slash effects
   updateAnimations(currentTime)
   updateProjectiles(deltaTime, currentTime)
+  updateEnemyProjectiles(deltaTime, currentTime)
   updateCoins(deltaTime) // Pass deltaTime for coin movement
   updateDiamonds(deltaTime) // Pass deltaTime for diamond movement
   updateSlashEffects()
@@ -340,7 +361,7 @@ const processNextUnitAction = (currentTime: number): boolean => {
     
     if (wallCell && wallCell.isOccupied && wallCell.occupiedBy) {
       // Check if this is a unit without a valid target/action
-      if (wallCell.occupiedBy === ALLY_UNITS.SWORDSMAN.id) {
+      if (wallCell.occupiedBy === ALLY_UNITS.SWORDSMAN.id || wallCell.occupiedBy === 'barbarian') {
         if (!meleeUnitHasTarget(position)) {
           // Melee unit with no target - skip without delay or animation
           combatState.currentUnitIndex++
@@ -352,7 +373,7 @@ const processNextUnitAction = (currentTime: number): boolean => {
           combatState.currentUnitIndex++
           continue
         }
-      } else if (wallCell.occupiedBy === ALLY_UNITS.MONK.id) {
+      } else if (wallCell.occupiedBy === ALLY_UNITS.MONK.id || wallCell.occupiedBy === 'bishop') {
         if (!monkHasHealingTarget(position)) {
           // Monk with no healing target - skip without delay or animation
           combatState.currentUnitIndex++
@@ -511,6 +532,10 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
         spawnDiamond(targetEnemy) // Spawn diamond
       }
     }
+    
+    // Spawn icicle projectiles if this is an Ice Golem dying
+    spawnIcicleProjectiles(targetEnemy, currentTime)
+    
     removeEnemy(targetEnemy)
     // addLogMessage(`${targetEnemy.type.name} is defeated!`) // Removed - not very useful
   }
@@ -808,6 +833,10 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
             spawnDiamond(hitEnemy) // Spawn diamond
           }
         }
+        
+        // Spawn icicle projectiles if this is an Ice Golem dying
+        spawnIcicleProjectiles(hitEnemy, currentTime)
+        
         removeEnemy(hitEnemy)
         // addLogMessage(`${hitEnemy.type.name} is defeated!`) // Removed - not very useful
       }
@@ -869,6 +898,254 @@ const checkProjectileEnemyCollision = (projectile: Projectile): any => {
 }
 
 /**
+ * Update enemy projectiles (icicles from Ice Golem death)
+ */
+const updateEnemyProjectiles = (deltaTime: number, currentTime: number) => {
+  enemyProjectiles = enemyProjectiles.filter(projectile => {
+    if (currentTime - projectile.startTime >= projectile.lifespan) {
+      projectile.isActive = false
+      return false
+    }
+    
+    // Move projectile
+    projectile.x += projectile.directionX * projectile.speed * (deltaTime / 1000)
+    projectile.y += projectile.directionY * projectile.speed * (deltaTime / 1000)
+    
+    // Check for collision with wall units
+    const hitWallUnit = checkEnemyProjectileWallCollision(projectile)
+    if (hitWallUnit) {
+      // Deal damage to wall unit
+      damageAlly(hitWallUnit.wallType, hitWallUnit.cellIndex, projectile.damage, null)
+      
+      // Add combat log
+      addLogMessage(`Wall unit hit for ${projectile.damage} damage by ${projectile.projectileType}`)
+      
+      // Remove projectile after hit
+      projectile.isActive = false
+      return false
+    }
+    
+    // Check if projectile has left extended bounds
+    const leftBound = LEFT_WALL_X - projectile.size
+    const rightBound = RIGHT_WALL_X + RIGHT_WALL_WIDTH + projectile.size
+    const topBound = BATTLEFIELD_Y - projectile.size - 100 // Extra space above battlefield
+    const bottomBound = BOTTOM_WALL_Y + BOTTOM_WALL_HEIGHT + projectile.size
+    
+    if (projectile.x < leftBound || projectile.x > rightBound || 
+        projectile.y < topBound || projectile.y > bottomBound) {
+      projectile.isActive = false
+      return false
+    }
+    
+    return true
+  })
+}
+
+/**
+ * Check if enemy projectile collides with any wall unit
+ */
+const checkEnemyProjectileWallCollision = (projectile: EnemyProjectile): {wallType: 'left' | 'right' | 'bottom', cellIndex: number} | null => {
+  const projectileRadius = projectile.size / 2
+  
+  // Check left wall
+  for (let i = 0; i < leftWallCells.length; i++) {
+    const cell = leftWallCells[i]
+    if (!cell.isOccupied) continue
+    
+    const cellX = LEFT_WALL_X + WALL_BORDER_WIDTH
+    const cellY = LEFT_WALL_Y + i * WALL_CELL_SIZE
+    const cellCenterX = cellX + WALL_CELL_SIZE / 2
+    const cellCenterY = cellY + WALL_CELL_SIZE / 2
+    
+    const distance = Math.sqrt(
+      Math.pow(projectile.x - cellCenterX, 2) + 
+      Math.pow(projectile.y - cellCenterY, 2)
+    )
+    
+    if (distance < projectileRadius + WALL_CELL_SIZE / 2) {
+      return {wallType: 'left', cellIndex: i}
+    }
+  }
+  
+  // Check right wall
+  for (let i = 0; i < rightWallCells.length; i++) {
+    const cell = rightWallCells[i]
+    if (!cell.isOccupied) continue
+    
+    const cellX = RIGHT_WALL_X + WALL_BORDER_WIDTH
+    const cellY = RIGHT_WALL_Y + i * WALL_CELL_SIZE
+    const cellCenterX = cellX + WALL_CELL_SIZE / 2
+    const cellCenterY = cellY + WALL_CELL_SIZE / 2
+    
+    const distance = Math.sqrt(
+      Math.pow(projectile.x - cellCenterX, 2) + 
+      Math.pow(projectile.y - cellCenterY, 2)
+    )
+    
+    if (distance < projectileRadius + WALL_CELL_SIZE / 2) {
+      return {wallType: 'right', cellIndex: i}
+    }
+  }
+  
+  // Check bottom wall
+  for (let i = 0; i < bottomWallCells.length; i++) {
+    const cell = bottomWallCells[i]
+    if (!cell.isOccupied) continue
+    
+    const cellX = BOTTOM_WALL_X + i * WALL_CELL_SIZE
+    const cellY = BOTTOM_WALL_Y + WALL_BORDER_WIDTH
+    const cellCenterX = cellX + WALL_CELL_SIZE / 2
+    const cellCenterY = cellY + WALL_CELL_SIZE / 2
+    
+    const distance = Math.sqrt(
+      Math.pow(projectile.x - cellCenterX, 2) + 
+      Math.pow(projectile.y - cellCenterY, 2)
+    )
+    
+    if (distance < projectileRadius + WALL_CELL_SIZE / 2) {
+      return {wallType: 'bottom', cellIndex: i}
+    }
+  }
+  
+  return null // No collision
+}
+
+/**
+ * Render enemy projectiles (icicles)
+ */
+const renderEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
+  enemyProjectiles.forEach(projectile => {
+    if (!projectile.isActive) return
+    
+    ctx.save()
+    
+    // Use icicle sprite
+    const projectileImage = getCachedImage(getImagePath('icicle.png'))
+    if (projectileImage) {
+      // Calculate scaling and size
+      const spriteScale = projectile.spriteScale || 1.0
+      const scaledSize = projectile.size * spriteScale
+      
+      // Calculate rotation based on direction and sprite orientation
+      let rotation = 0
+      if (projectile.directionX === 1) rotation = Math.PI / 2 // Flying right: 90° clockwise
+      else if (projectile.directionX === -1) rotation = -Math.PI / 2 // Flying left: 90° counter-clockwise
+      else if (projectile.directionY === -1) rotation = 0 // Flying up: no rotation
+      else if (projectile.directionY === 1) rotation = Math.PI // Flying down: 180°
+      
+      // Rotate and draw icicle image with scaling
+      ctx.translate(projectile.x, projectile.y)
+      ctx.rotate(rotation)
+      
+      drawImage(ctx, projectileImage, 
+        -scaledSize / 2, 
+        -scaledSize / 2,
+        scaledSize, 
+        scaledSize
+      )
+    } else {
+      // Fallback: simple rectangle if image not loaded
+      const spriteScale = projectile.spriteScale || 1.0
+      const scaledSize = projectile.size * spriteScale
+      
+      // Light blue color for ice
+      ctx.fillStyle = '#87CEEB'
+      ctx.fillRect(
+        projectile.x - scaledSize / 2,
+        projectile.y - scaledSize / 2,
+        scaledSize,
+        scaledSize
+      )
+    }
+    
+    ctx.restore()
+  })
+}
+
+/**
+ * Spawn icicle projectiles from Ice Golem death
+ */
+export const spawnIcicleProjectiles = (enemy: any, currentTime: number) => {
+  // Only spawn if this is an Ice Golem
+  if (enemy.type.id !== 'icegolem') return
+  
+  const projectileSize = BATTLEFIELD_CELL_SIZE * PROJECTILE_SIZE_RATIO * 1.5 // Slightly larger than arrows
+  
+  // Get battlefield coordinates for the Ice Golem
+  const battlefieldCoords = getBattlefieldCellCoords(enemy.x, enemy.y)
+  
+  // Ice Golem is 2x3, so it has:
+  // Left side: 3 cells (top, middle, bottom)
+  // Right side: 3 cells (top, middle, bottom) 
+  // Bottom: 2 cells (left, right)
+  
+  // Choose random cells for projectile launch points
+  const leftSide = Math.floor(Math.random() * 3) // 0, 1, or 2 (top, middle, bottom)
+  const rightSide = Math.floor(Math.random() * 3) // 0, 1, or 2 (top, middle, bottom)
+  const bottomSide = Math.floor(Math.random() * 2) // 0 or 1 (left or right)
+  
+  // Left projectile (shoots left)
+  const leftStartY = battlefieldCoords.y + leftSide * BATTLEFIELD_CELL_SIZE + BATTLEFIELD_CELL_SIZE / 2
+  const leftProjectile: EnemyProjectile = {
+    id: `icicle_left_${currentTime}_${Math.random()}`,
+    uuid: generateUUID(),
+    x: battlefieldCoords.x, // Left edge of enemy
+    y: leftStartY,
+    directionX: -1, // Shoot left
+    directionY: 0,
+    speed: PROJECTILE_SPEED * 0.8, // Slightly slower than ally projectiles
+    startTime: currentTime,
+    lifespan: PROJECTILE_LIFESPAN_MS,
+    size: projectileSize,
+    projectileType: 'icicle',
+    damage: ICICLE_DAMAGE,
+    isActive: true
+  }
+  
+  // Right projectile (shoots right)  
+  const rightStartY = battlefieldCoords.y + rightSide * BATTLEFIELD_CELL_SIZE + BATTLEFIELD_CELL_SIZE / 2
+  const rightProjectile: EnemyProjectile = {
+    id: `icicle_right_${currentTime}_${Math.random()}`,
+    uuid: generateUUID(),
+    x: battlefieldCoords.x + enemy.type.width * BATTLEFIELD_CELL_SIZE, // Right edge of enemy
+    y: rightStartY,
+    directionX: 1, // Shoot right
+    directionY: 0,
+    speed: PROJECTILE_SPEED * 0.8,
+    startTime: currentTime,
+    lifespan: PROJECTILE_LIFESPAN_MS,
+    size: projectileSize,
+    projectileType: 'icicle',
+    damage: ICICLE_DAMAGE,
+    isActive: true
+  }
+  
+  // Bottom projectile (shoots down)
+  const bottomStartX = battlefieldCoords.x + bottomSide * BATTLEFIELD_CELL_SIZE + BATTLEFIELD_CELL_SIZE / 2
+  const bottomProjectile: EnemyProjectile = {
+    id: `icicle_bottom_${currentTime}_${Math.random()}`,
+    uuid: generateUUID(),
+    x: bottomStartX,
+    y: battlefieldCoords.y + enemy.type.height * BATTLEFIELD_CELL_SIZE, // Bottom edge of enemy
+    directionX: 0,
+    directionY: 1, // Shoot down
+    speed: PROJECTILE_SPEED * 0.8,
+    startTime: currentTime,
+    lifespan: PROJECTILE_LIFESPAN_MS,
+    size: projectileSize,
+    projectileType: 'icicle',
+    damage: ICICLE_DAMAGE,
+    isActive: true
+  }
+  
+  // Add all projectiles
+  enemyProjectiles.push(leftProjectile, rightProjectile, bottomProjectile)
+  
+  // Add combat log
+  addLogMessage(`Ice Golem launches 3 icicle projectiles!`)
+}
+
+/**
  * Render all combat effects
  */
 export const renderCombatEffects = (ctx: CanvasRenderingContext2D) => {
@@ -878,6 +1155,7 @@ export const renderCombatEffects = (ctx: CanvasRenderingContext2D) => {
   renderAttackAnimations(ctx)
   renderHitAnimations(ctx)
   renderProjectiles(ctx)
+  renderEnemyProjectiles(ctx)
   renderCoins(ctx)
   renderDiamonds(ctx)
   // Render flying damage numbers last so they appear on top of everything

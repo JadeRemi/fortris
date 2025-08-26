@@ -74,7 +74,6 @@ const GameCanvas: React.FC = () => {
     // Use same colors as other buttons but smaller styling
     const borderColor = '#8b7355'
     const bgColor = isPressed ? '#1f1810' : (isHovered ? '#3a2d20' : '#2d2318')
-    const shadowColor = '#1a1209'
     const highlightColor = isHovered ? '#5a4635' : '#8b7355'
     
     ctx.save()
@@ -400,6 +399,7 @@ const GameCanvas: React.FC = () => {
       // Projectiles and Effects
       getImagePath('arrow.png'), // Preload arrow for projectiles
       getImagePath('spear.png'), // Preload spear for future lancer projectiles
+      getImagePath('icicle.png'), // Preload icicle for future projectiles
       getImagePath('slash.png'), // Preload slash effect for melee attacks
       getImagePath('claws.png'), // Preload claws effect for enemy attacks
       
@@ -411,6 +411,7 @@ const GameCanvas: React.FC = () => {
       getImagePath('skeleton.png'), // Preload skeleton enemy (no natural spawning)
       getImagePath('serpent.png'), // Preload serpent enemy
       getImagePath('spider.png'), // Preload spider enemy unit
+      getImagePath('icegolem.png'), // Preload ice golem enemy
       
       // UI and Rewards
       getImagePath('coin.png'), // Preload coin for rewards
