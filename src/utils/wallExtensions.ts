@@ -564,7 +564,5 @@ export const upgradeWallUnit = (wallType: 'left' | 'right' | 'bottom', cellIndex
   // Add upgrade log message
   addLogMessage(COMBAT_MESSAGES.unitUpgraded(currentUnitType.name, upgradedUnitType.name))
   
-  console.log(`🔧 Upgraded ${currentUnitId} → ${upgradedUnitId} (health: ${currentHealth}/${upgradedUnitType.maxHealth})`)
-  
   return true
 }

@@ -199,3 +199,11 @@ export const CHALLENGES_X = ARMY_X // Same X position as ARMY (directly below)
 export const CHALLENGES_Y = ARMY_Y + 400 + 30 // Below ARMY with 30px gap (using explicit 400px height)
 export const CHALLENGES_WIDTH = ARMY_WIDTH // Same width as ARMY
 export const CHALLENGES_HEIGHT = 400 // Same height as other sections
+
+// Info section configuration (carousel for unit information)
+export const INFO_X = CONTROLS_X // Same X position as CONTROLS (directly below)
+export const INFO_Y = CONTROLS_Y + 400 + 30 // Same Y as CHALLENGES (below CONTROLS with 30px gap)
+export const INFO_WIDTH = CONTROLS_WIDTH // Same width as CONTROLS (200px)
+export const INFO_HEIGHT = 400 // Same height as other UI blocks
+export const INFO_ARROW_GAP = 45 // Gap between unit cell and navigation arrows (3x the original 15px)
+export const INFO_TOOLTIP_OFFSET = 25 // Distance above chevron for tooltip (negative = above, positive = below)

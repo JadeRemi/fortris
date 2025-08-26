@@ -150,7 +150,6 @@ export const updateChallengeProgress = (): void => {
       // Check if completed
       if (challenge.current >= challenge.target) {
         challenge.isCompleted = true
-        console.log(`🏆 Challenge completed: ${challenge.description}`)
       }
     }
   } catch (error) {

@@ -131,10 +131,7 @@ export const findSpawnPosition = (enemyType: EnemyType): { x: number; y: number 
   // - 3x3: spawnY = 0 - (3-1) = -2 (rows: -2,-1,0 -> only row 0 visible)
   const spawnY = -(enemyType.height - 1)
   
-  // Debug spawn positioning (disabled for production)
-  // if (enemyType.height > 1) {
-  //   console.log(`🏗️ Spawn calc for ${enemyType.name}: spawnY=${spawnY}`)  
-  // }
+
   
   // Collect all valid positions
   const validPositions: number[] = []
@@ -214,10 +211,7 @@ export const spawnEnemy = (enemyType: EnemyType): boolean => {
   
   enemies.push(newEnemy)
   
-  // Debug successful spawn (disabled for production)
-  // if (enemyType.height > 1) {
-  //   console.log(`✅ Spawned ${enemyType.name} at (${position.x}, ${position.y})`)
-  // }
+
   
   // Mark battlefield cells as occupied
   for (let dy = 0; dy < enemyType.height; dy++) {
@@ -456,34 +450,16 @@ const executeLateralMovement = (enemy: Enemy, direction: 'left' | 'right'): bool
  * Try to attack adjacent allies when enemy cannot move
  */
 const tryEnemyAttack = (enemy: Enemy): void => {
-  // Debug: Log enemies in rightmost column who can't move
-  const isInRightmostColumn = enemy.x + enemy.type.width - 1 === LEVEL_WIDTH - 1
-  if (isInRightmostColumn) {
-    console.log(`👹 Enemy ${enemy.type.name} at (${enemy.x},${enemy.y}) in rightmost column, checking for right wall allies`)
-  }
-  
   const adjacentAllies = findAdjacentAllies(enemy)
   
   if (adjacentAllies.length === 0) {
-    if (isInRightmostColumn) {
-      console.log(`❌ No adjacent allies found for rightmost enemy ${enemy.type.name}`)
-      // Debug: dump all right wall units
-      const rightWallStatus = []
-      for (let i = 0; i < LEVEL_HEIGHT; i++) {
-        const cell = getWallCell('right', i)
-        rightWallStatus.push(`Cell ${i}: ${cell?.isOccupied ? `occupied by ${cell.occupiedBy}` : 'empty'}`)
-      }
-      console.log('🏰 Right wall status:', rightWallStatus.join(', '))
-    }
     return // No adjacent allies to attack
   }
   
   // Pick one ally to attack (enemies attack only one ally per turn)
   const targetAlly = adjacentAllies[Math.floor(Math.random() * adjacentAllies.length)]
   
-  if (isInRightmostColumn) {
-    console.log(`⚔️ Rightmost enemy ${enemy.type.name} attacking ${targetAlly.wallType} wall cell ${targetAlly.cellIndex}`)
-  }
+
   
   // Deal 1 damage to the ally (all enemies deal 1 damage)
   damageAlly(targetAlly.wallType, targetAlly.cellIndex, 1, enemy)
@@ -757,10 +733,7 @@ export const renderEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy): void =
   const spriteStartRow = visibleStartY - enemy.y // Row offset from top of enemy sprite
   const spriteRows = visibleRows // Number of rows to draw from sprite
 
-  // Debug multi-cell enemy rendering (disabled for production)
-  // if (enemy.type.height > 1) {
-  //   console.log(`🐛 Rendering ${enemy.type.name}: y=${enemy.y}, visible=${visibleStartY}-${visibleEndY}, rows=${spriteRows}`)
-  // }
+
 
   // Get battlefield position for rendering (top-left of visible area)
   // Use battlefieldToCanvas for proper cell boundary alignment
@@ -809,7 +782,6 @@ export const getEnemyAt = (x: number, y: number): Enemy | null => {
  * Spawn small spiders when a Large Spider dies
  */
 const spawnSmallSpiders = (largeSpider: Enemy): void => {
-  console.log(`🕷️ Large Spider death: spawning small spiders at (${largeSpider.x}, ${largeSpider.y})`)
   const spawnArea: { x: number, y: number }[] = []
   
   // Collect all cells that were occupied by the large spider
@@ -818,7 +790,6 @@ const spawnSmallSpiders = (largeSpider: Enemy): void => {
       spawnArea.push({ x: largeSpider.x + dx, y: largeSpider.y + dy })
     }
   }
-  console.log(`📍 Large Spider occupied ${spawnArea.length} cells:`, spawnArea)
   
   // Shuffle spawn area to randomize positions
   for (let i = spawnArea.length - 1; i > 0; i--) {
@@ -841,18 +812,13 @@ const spawnSmallSpiders = (largeSpider: Enemy): void => {
     }
   }
   
-  console.log(`🎲 Rolled ${numSpidersToSpawn} small spiders to spawn`)
-  
   const smallSpiderType = ENEMY_UNITS.SPIDER_SMALL
-  console.log(`🔍 Small spider type:`, smallSpiderType ? 'found' : 'NOT FOUND')
   
   let spawnedCount = 0
   
   // Try to spawn small spiders in the available positions
   for (let i = 0; i < numSpidersToSpawn && i < spawnArea.length; i++) {
     const { x, y } = spawnArea[i]
-    
-    console.log(`🎯 Trying to spawn small spider #${i + 1} at (${x}, ${y})`)
     
     // Check if the position is valid and not already occupied by another enemy
     if (canPlaceEnemyAt(x, y, smallSpiderType)) {
@@ -870,13 +836,8 @@ const spawnSmallSpiders = (largeSpider: Enemy): void => {
       enemies.push(newSmallSpider)
       setBattlefieldCell(x, y, newSmallSpider.id)
       spawnedCount++
-      console.log(`✅ Successfully spawned small spider at (${x}, ${y})`)
-    } else {
-      console.log(`❌ Cannot spawn small spider at (${x}, ${y}) - position blocked`)
     }
   }
-  
-  console.log(`📊 Spawned ${spawnedCount}/${numSpidersToSpawn} small spiders`)
 }
 
 /**

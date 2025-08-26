@@ -11,6 +11,7 @@ import { restartGame } from '../utils/gameResetUtils'
 import { renderPlacedUnits, isWallCellOccupied, getLeftWallCellIndex, getRightWallCellIndex, getBottomWallCellIndex, renderUnitHealthNumbers, clearAllWallUnits, upgradeWallUnit } from '../utils/wallExtensions'
 import { renderInventory, isPointInUpgradeButton } from '../utils/inventoryUtils'
 import { renderChallenges } from '../utils/challengesUtils'
+import { renderInfo, handleInfoClick, handleInfoTooltips, isPointInLeftArrow, isPointInRightArrow } from '../utils/infoUtils'
 import { initializeChallenges, updateChallengeProgress } from '../utils/challengeSystem'
 import { getCollectedDiamondCount, spendDiamond, addDiamonds } from '../utils/diamondUtils'
 import { addCoins } from '../utils/coinUtils'
@@ -294,6 +295,9 @@ const GameCanvas: React.FC = () => {
     
     // Render challenges section
     renderChallenges(ctx)
+    
+    // Render info section (unit carousel)
+    renderInfo(ctx)
 
     // Render canvas buttons
     drawPixelButton(ctx, statsButton.current)
@@ -517,8 +521,15 @@ const GameCanvas: React.FC = () => {
     // Handle army tooltips
     handleArmyMouseMove(canvasCoords.x, canvasCoords.y, renderGame, statsEnabled)
     
-    // Handle fullscreen button tooltip (only show when stats enabled and no unit selected)
+    // Get selection state for tooltip conditions
     const selectionState = getSelectionState()
+    
+    // Handle info carousel tooltips (only show when stats enabled and no unit selected)
+    if (statsEnabled && !selectionState.isUnitSelected) {
+      handleInfoTooltips(canvasCoords.x, canvasCoords.y)
+    }
+    
+    // Handle fullscreen button tooltip (only show when stats enabled and no unit selected)
     if (statsEnabled && !selectionState.isUnitSelected && fullscreenButton.current.isHovered) {
       const tooltipX = fullscreenButton.current.x + fullscreenButton.current.width / 2
       const tooltipY = fullscreenButton.current.y + fullscreenButton.current.height + 5 // Below button
@@ -543,11 +554,14 @@ const GameCanvas: React.FC = () => {
     // Check if hovering over upgrade button
     const overUpgradeButton = isPointInUpgradeButton(canvasCoords.x, canvasCoords.y)
     
+    // Check if hovering over info carousel arrows
+    const overInfoArrows = isPointInLeftArrow(canvasCoords.x, canvasCoords.y) || isPointInRightArrow(canvasCoords.x, canvasCoords.y)
+    
     // Set appropriate cursor
     if (selectionState.isUnitSelected || selectionState.isUpgradeSelected) {
       canvas.style.cursor = 'none' // Hide cursor when showing sprite
     } else {
-      canvas.style.cursor = (overButton || overUnit || overPlusButton || overUpgradeButton) ? 'pointer' : 'default'
+      canvas.style.cursor = (overButton || overUnit || overPlusButton || overUpgradeButton || overInfoArrows) ? 'pointer' : 'default'
     }
     
     // Request re-render if any button hover state changed
@@ -624,6 +638,12 @@ const GameCanvas: React.FC = () => {
       return
     }
     
+    // Check if clicking on info carousel navigation arrows
+    if (handleInfoClick(canvasCoords.x, canvasCoords.y)) {
+      renderGame()
+      return
+    }
+    
           // Handle upgrade button click
       if (isPointInUpgradeButton(canvasCoords.x, canvasCoords.y)) {
         const diamondCount = getCollectedDiamondCount()
@@ -631,10 +651,8 @@ const GameCanvas: React.FC = () => {
           const selectionState = getSelectionState()
           if (!selectionState.isUpgradeSelected) {
             selectUpgrade()
-            console.log('🔧 Upgrade selected - click on a wall unit to upgrade')
           } else {
             clearUpgradeSelection()
-            console.log('🔧 Upgrade deselected')
           }
           renderGame()
         }
@@ -683,9 +701,6 @@ const GameCanvas: React.FC = () => {
       const leftCellIndex = getLeftWallCellIndex(canvasCoords.x, canvasCoords.y)
       if (leftCellIndex >= 0 && isWallCellOccupied('left', leftCellIndex)) {
         upgraded = upgradeWallUnit('left', leftCellIndex)
-        if (!upgraded) {
-          console.log('🚫 Cannot upgrade this unit (already upgraded or invalid)')
-        }
       }
       
       // Check right wall if not upgraded
@@ -693,9 +708,6 @@ const GameCanvas: React.FC = () => {
         const rightCellIndex = getRightWallCellIndex(canvasCoords.x, canvasCoords.y)
         if (rightCellIndex >= 0 && isWallCellOccupied('right', rightCellIndex)) {
           upgraded = upgradeWallUnit('right', rightCellIndex)
-          if (!upgraded) {
-            console.log('🚫 Cannot upgrade this unit (already upgraded or invalid)')
-          }
         }
       }
       
@@ -704,9 +716,6 @@ const GameCanvas: React.FC = () => {
         const bottomCellIndex = getBottomWallCellIndex(canvasCoords.x, canvasCoords.y)
         if (bottomCellIndex >= 0 && isWallCellOccupied('bottom', bottomCellIndex)) {
           upgraded = upgradeWallUnit('bottom', bottomCellIndex)
-          if (!upgraded) {
-            console.log('🚫 Cannot upgrade this unit (already upgraded or invalid)')
-          }
         }
       }
       
@@ -714,8 +723,6 @@ const GameCanvas: React.FC = () => {
       clearUpgradeSelection()
       if (upgraded) {
         spendDiamond() // Cost 1 diamond
-      } else {
-        console.log('🔧 Upgrade cancelled - clicked on empty area')
       }
       
       renderGame()
@@ -791,7 +798,6 @@ const GameCanvas: React.FC = () => {
         // Add 1000 coins and 1000 diamonds
         addCoins(1000)
         addDiamonds(1000)
-        console.log('💰 Added 1000 coins and 1000 diamonds')
         renderGame() // Re-render after adding resources
       }
       
@@ -805,8 +811,6 @@ const GameCanvas: React.FC = () => {
       if (isPointInButton(canvasCoords.x, canvasCoords.y, freezeButton.current)) {
         // Toggle freeze state
         toggleFreeze()
-        const newState = isFrozen() ? 'frozen' : 'resumed'
-        console.log(`❄️ Combat turns ${newState}`)
         renderGame() // Re-render to update button state
       }
       
