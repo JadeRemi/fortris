@@ -27,12 +27,16 @@ import {
   PROJECTILE_SIZE_RATIO,
   MONK_HEALING_AMOUNT,
   BATTLEFIELD_CELL_BORDER_WIDTH,
-  ICICLE_DAMAGE
+  ICICLE_DAMAGE,
+  LANCER_DAMAGE_MULTIPLIER,
+  BARBARIAN_DAMAGE_MULTIPLIER,
+  BARBARIAN_MAIN_TARGET_MULTIPLIER,
+  BISHOP_MAX_HEALTH_BOOST
 } from '../config/gameConfig'
 import { getWallCell, leftWallCells, rightWallCells, bottomWallCells } from './wallExtensions'
 import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { getCachedImage, drawImage } from './imageUtils'
-import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder, damageAlly } from './enemyUtils'
+import { processEnemySpawn, processEnemyTurn, renderEnemies, initializeBattlefield, getEnemyAt, removeEnemy, getBattlefieldCellCoords, getEnemiesInProcessingOrder, damageAlly, enemies } from './enemyUtils'
 import { battlefieldToCanvas } from './battlefieldUtils'
 import { addLogMessage } from './logsUtils'
 import { generateUUID } from './uuidUtils'
@@ -42,7 +46,9 @@ import { spawnCoin, updateCoins, renderCoins, clearCoins } from './coinUtils'
 import { spawnDiamond, updateDiamonds, renderDiamonds, clearDiamonds } from './diamondUtils'
 import { spawnSlashEffect, updateSlashEffects, renderSlashEffects, clearSlashEffects } from './slashUtils'
 import { updateClawsEffects, renderClawsEffects, clearClawsEffects } from './clawsUtils'
-import { spawnDamageNumber, spawnHealingNumber, updateDamageNumbers, renderDamageNumbers, clearDamageNumbers } from './damageNumberUtils'
+import { spawnDamageNumber, spawnHealingNumber, spawnMaxHealthBoostNumber, updateDamageNumbers, renderDamageNumbers, clearDamageNumbers } from './damageNumberUtils'
+import { incrementOgreKills, incrementUnitsReached200Health, incrementSpearMultikills } from './challengeSystem'
+import { COMBAT_MESSAGES } from '../config/messages'
 
 // Combat state management
 interface CombatState {
@@ -64,8 +70,7 @@ interface AttackAnimation {
 }
 
 interface HitAnimation {
-  battlefieldCol: number
-  battlefieldRow: number
+  enemyUuid: string     // Track enemy by UUID instead of position
   enemyWidth: number    // Width of the enemy in cells
   enemyHeight: number   // Height of the enemy in cells
   startTime: number
@@ -87,6 +92,8 @@ interface Projectile {
   spriteScale?: number // Optional sprite scale (default 1.0 = 100%)
   unitType: string // Unit type that fired this projectile (for sprite selection and damage)
   isActive: boolean
+  recentlyHitCells?: Set<string> // Track recently hit cell coordinates (e.g., "3,5") to prevent multi-hit on same cell
+  enemyKillCount?: number // Track number of enemies killed by this spear (for multikill challenge)
 }
 
 interface EnemyProjectile {
@@ -351,6 +358,27 @@ const monkHasHealingTarget = (position: UnitPosition): boolean => {
 }
 
 /**
+ * Check if bishop has any action available (healing or max health boost)
+ */
+const bishopHasAction = (position: UnitPosition): boolean => {
+  // First check for healing targets on same wall
+  let hasHealingTarget = findClosestInjuredAlly(position, false) !== null
+  
+  if (!hasHealingTarget) {
+    // Check for healing targets on all walls
+    hasHealingTarget = findClosestInjuredAlly(position, true) !== null
+  }
+  
+  if (hasHealingTarget) {
+    return true // Has healing target
+  }
+  
+  // No healing targets, check for max health boost opportunity
+  const boostTarget = findLowestHealthAllyForBoost(position)
+  return boostTarget !== null
+}
+
+/**
  * Process the next unit's action
  * @returns true if there are more units to process, false if turn is complete
  */
@@ -373,9 +401,15 @@ const processNextUnitAction = (currentTime: number): boolean => {
           combatState.currentUnitIndex++
           continue
         }
-      } else if (wallCell.occupiedBy === ALLY_UNITS.MONK.id || wallCell.occupiedBy === 'bishop') {
+      } else if (wallCell.occupiedBy === ALLY_UNITS.MONK.id) {
         if (!monkHasHealingTarget(position)) {
           // Monk with no healing target - skip without delay or animation
+          combatState.currentUnitIndex++
+          continue
+        }
+      } else if (wallCell.occupiedBy === 'bishop') {
+        if (!bishopHasAction(position)) {
+          // Bishop with no actions available - skip without delay or animation
           combatState.currentUnitIndex++
           continue
         }
@@ -455,10 +489,90 @@ const performUnitAction = (position: UnitPosition, unitType: string, currentTime
 }
 
 /**
+ * Deal damage to an enemy and handle all associated effects
+ */
+const dealDamageToEnemy = (enemy: any, damage: number, currentTime: number) => {
+  enemy.health -= damage
+  
+  // Add pain effect for visual feedback
+  addPainEffect(enemy)
+  
+  // Spawn flying damage number
+  spawnDamageNumber(enemy, damage)
+  
+  // Add hit animation scaled to enemy size
+  hitAnimations.push({
+    enemyUuid: enemy.uuid,
+    enemyWidth: enemy.type.width,
+    enemyHeight: enemy.type.height, // Use full enemy height
+    startTime: currentTime,
+    duration: HIT_ANIMATION_DURATION_MS,
+    isActive: true
+  })
+  
+  // Add combat log
+  addLogMessage(COMBAT_MESSAGES.enemyHit(enemy.type.name, damage))
+  
+  // Check if enemy should be removed (health <= 0)
+  if (enemy.health <= 0) {
+    // Track ogre kills for challenge system
+    if (enemy.type.id === 'ogre') {
+      incrementOgreKills()
+    }
+    
+    // Check if enemy drops loot based on their lootChance
+    if (Math.random() <= enemy.type.lootChance) {
+      // 95% chance for gold, 5% chance for diamond
+      if (Math.random() <= 0.95) {
+        spawnCoin(enemy) // Spawn gold coin
+      } else {
+        spawnDiamond(enemy) // Spawn diamond
+      }
+    }
+    
+    // Spawn icicle projectiles if this is an Ice Golem dying
+    spawnIcicleProjectiles(enemy, currentTime)
+    
+    removeEnemy(enemy)
+    // addLogMessage(`${enemy.type.name} is defeated!`) // Removed - not very useful
+  }
+}
+
+/**
+ * Deal barbarian area damage to cells adjacent to the main target
+ */
+const dealBarbarianAreaDamage = (mainCol: number, mainRow: number, damage: number, currentTime: number) => {
+  // Adjacent cells: left, right, top (relative to the main target cell)
+  const adjacentCells = [
+    { col: mainCol - 1, row: mainRow }, // Left
+    { col: mainCol + 1, row: mainRow }, // Right  
+    { col: mainCol, row: mainRow - 1 }, // Top
+  ]
+  
+  for (const cell of adjacentCells) {
+    // Check bounds
+    if (cell.col < 0 || cell.col >= LEVEL_WIDTH || cell.row < 0 || cell.row >= LEVEL_HEIGHT) {
+      continue
+    }
+    
+    // Check if there's an enemy in this cell
+    const enemy = getEnemyAt(cell.col, cell.row)
+    if (enemy) {
+      dealDamageToEnemy(enemy, damage, currentTime)
+    }
+  }
+}
+
+/**
  * Perform melee attack on adjacent battlefield cell
  * Only attacks if there's an enemy in the target cell
+ * Barbarians deal area damage to main target and adjacent cells
  */
 const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
+  const unit = getWallCell(position.wallType, position.cellIndex)
+  const attackerUnitType = unit?.occupiedBy || ''
+  const isBarbarian = attackerUnitType === 'barbarian'
+  
   let targetCol: number, targetRow: number
   
   switch (position.wallType) {
@@ -490,113 +604,216 @@ const performMeleeAttack = (position: UnitPosition, currentTime: number) => {
   // Spawn slash effect since we have a valid target
   spawnSlashEffect(position.wallType, position.cellIndex)
   
-  // Deal damage to the enemy using unit's damage value
+  // Calculate damage based on unit type
   const wallCell = getWallCell(position.wallType, position.cellIndex)
-  const unitType = getUnitById(wallCell?.occupiedBy!)
-  const damage = unitType?.damage || 1 // Use unit's damage, fallback to 1
-  targetEnemy.health -= damage
+  const unitConfig = getUnitById(wallCell?.occupiedBy!)
+  let baseDamage = unitConfig?.damage || 1 // Use unit's damage, fallback to 1
   
-  // Add pain effect for visual feedback
-  addPainEffect(targetEnemy)
-  
-  // Spawn flying damage number
-  spawnDamageNumber(targetEnemy, damage)
-  
-  // Add hit animation scaled to enemy size
-  // Calculate visible portion for partially hidden enemies
-  const visibleStartY = Math.max(targetEnemy.y, 0)
-  const visibleEndY = Math.min(targetEnemy.y + targetEnemy.type.height, LEVEL_HEIGHT)
-  const visibleHeight = Math.max(0, visibleEndY - visibleStartY)
-  
-  hitAnimations.push({
-    battlefieldCol: targetEnemy.x,
-    battlefieldRow: visibleStartY, // Use actual visible start, not clamped enemy position
-    enemyWidth: targetEnemy.type.width,
-    enemyHeight: visibleHeight, // Use visible height only
-    startTime: currentTime,
-    duration: HIT_ANIMATION_DURATION_MS,
-    isActive: true
-  })
-  
-  // Add combat log
-  addLogMessage(`${targetEnemy.type.name} is hit for ${damage} damage`)
-  
-  // Check if enemy should be removed (health <= 0)
-  if (targetEnemy.health <= 0) {
-    // Check if enemy drops loot based on their lootChance
-    if (Math.random() <= targetEnemy.type.lootChance) {
-      // 95% chance for gold, 5% chance for diamond
-      if (Math.random() <= 0.95) {
-        spawnCoin(targetEnemy) // Spawn gold coin
-      } else {
-        spawnDiamond(targetEnemy) // Spawn diamond
-      }
-    }
+  if (isBarbarian) {
+    // Barbarian deals upgraded damage
+    baseDamage = ALLY_UNITS.SWORDSMAN.damage * BARBARIAN_DAMAGE_MULTIPLIER
     
-    // Spawn icicle projectiles if this is an Ice Golem dying
-    spawnIcicleProjectiles(targetEnemy, currentTime)
+    // Main target gets 2x barbarian damage (4x swordsman total)
+    const mainTargetDamage = baseDamage * BARBARIAN_MAIN_TARGET_MULTIPLIER
+    dealDamageToEnemy(targetEnemy, mainTargetDamage, currentTime)
     
-    removeEnemy(targetEnemy)
-    // addLogMessage(`${targetEnemy.type.name} is defeated!`) // Removed - not very useful
+    // Deal area damage to adjacent cells
+    dealBarbarianAreaDamage(targetCol, targetRow, baseDamage, currentTime)
+  } else {
+    // Regular melee attack
+    dealDamageToEnemy(targetEnemy, baseDamage, currentTime)
   }
 }
 
 /**
- * Perform monk healing on injured allies on the same wall
+ * Perform monk/bishop healing on injured allies
+ * Monks heal on same wall only, Bishops heal across all walls and can boost max health
  */
 const performMonkHealing = (position: UnitPosition, _currentTime: number) => {
-  // Find injured allies by range priority (closest first)
-  const targetAlly = findClosestInjuredAlly(position)
+  const unit = getWallCell(position.wallType, position.cellIndex)
+  const healerUnitType = unit?.occupiedBy || ''
+  const isBishop = healerUnitType === 'bishop'
   
-  if (!targetAlly) {
-    return // No one to heal
+  // Find injured allies - bishops search all walls if needed
+  let targetAlly = findClosestInjuredAlly(position, false) // Same wall first
+  
+  if (!targetAlly && isBishop) {
+    // Bishop searches other walls if no targets on same wall
+    targetAlly = findClosestInjuredAlly(position, true) // All walls
   }
   
-  // Heal the ally
-  const currentHealth = targetAlly.wallCell.currentHealth || 0
-  const maxHealth = targetAlly.wallCell.maxHealth || 0
-  const healAmount = Math.min(MONK_HEALING_AMOUNT, maxHealth - currentHealth)
-  
-  if (healAmount > 0) {
-    targetAlly.wallCell.currentHealth = currentHealth + healAmount
+  if (targetAlly) {
+    // Heal the ally
+    const currentHealth = targetAlly.wallCell.currentHealth || 0
+    const maxHealth = targetAlly.wallCell.maxHealth || 0
+    const healAmount = Math.min(MONK_HEALING_AMOUNT, maxHealth - currentHealth)
     
-    // Spawn green healing number
-    const wallCoords = getWallCellCoords(targetAlly.wallType, targetAlly.cellIndex)
-    const centerX = wallCoords.x + WALL_CELL_SIZE / 2
-    const centerY = wallCoords.y - 10 // Above the ally
-    spawnHealingNumber(centerX, centerY, healAmount)
+    if (healAmount > 0) {
+      const newHealth = currentHealth + healAmount
+      targetAlly.wallCell.currentHealth = newHealth
+      
+      // Check if unit reached 200 health for challenge tracking
+      if (newHealth >= 200) {
+        incrementUnitsReached200Health()
+      }
+      
+      // Spawn green healing number
+      const wallCoords = getWallCellCoords(targetAlly.wallType, targetAlly.cellIndex)
+      const centerX = wallCoords.x + WALL_CELL_SIZE / 2
+      const centerY = wallCoords.y - 10 // Above the ally
+      spawnHealingNumber(centerX, centerY, healAmount)
+      
+      return
+    }
+  }
+  
+  // Bishop special ability: boost max health if no one needs healing
+  if (isBishop && !targetAlly) {
+    const boostTarget = findLowestHealthAllyForBoost(position)
+    if (boostTarget) {
+      const newMaxHealth = (boostTarget.wallCell.maxHealth || 0) + BISHOP_MAX_HEALTH_BOOST
+      boostTarget.wallCell.maxHealth = newMaxHealth
+      
+      // Check if unit reached 200 health for challenge tracking
+      if (newMaxHealth >= 200) {
+        incrementUnitsReached200Health()
+      }
+      
+      // Spawn blue boost number
+      const wallCoords = getWallCellCoords(boostTarget.wallType, boostTarget.cellIndex)
+      const centerX = wallCoords.x + WALL_CELL_SIZE / 2
+      const centerY = wallCoords.y - 10 // Above the ally
+      spawnMaxHealthBoostNumber(centerX, centerY, BISHOP_MAX_HEALTH_BOOST)
+    }
   }
 }
 
 /**
- * Find the closest injured ally to a monk, prioritizing by range
+ * Find the closest injured ally to a monk/bishop, prioritizing by range
  */
-const findClosestInjuredAlly = (monkPosition: UnitPosition) => {
-  // Search by range: 1 cell away first, then 2 cells, etc.
-  for (let range = 1; range <= 12; range++) { // Max 12 cells (full wall length)
-    const injuredAtRange = findInjuredAlliesAtRange(monkPosition, range)
-    if (injuredAtRange.length > 0) {
-      // If multiple allies at same range, pick most injured (lowest health %)
-      let mostInjuredAlly = injuredAtRange[0]
-      let lowestHealthPercent = (mostInjuredAlly.currentHealth || 0) / (mostInjuredAlly.maxHealth || 1)
-      
-      for (const ally of injuredAtRange) {
-        const healthPercent = (ally.currentHealth || 0) / (ally.maxHealth || 1)
-        if (healthPercent < lowestHealthPercent) {
-          mostInjuredAlly = ally
-          lowestHealthPercent = healthPercent
-        }
+const findClosestInjuredAlly = (healerPosition: UnitPosition, searchAllWalls: boolean = false) => {
+  if (!searchAllWalls) {
+    // Original behavior - search same wall only
+    for (let range = 1; range <= 12; range++) { // Max 12 cells (full wall length)
+      const injuredAtRange = findInjuredAlliesAtRange(healerPosition, range)
+      if (injuredAtRange.length > 0) {
+        return getMostInjuredAlly(injuredAtRange)
       }
-      return mostInjuredAlly
+    }
+  } else {
+    // Bishop behavior - search all walls
+    const allInjuredAllies = findAllInjuredAllies(healerPosition)
+    if (allInjuredAllies.length > 0) {
+      return getMostInjuredAlly(allInjuredAllies)
     }
   }
   return null // No injured allies found
 }
 
 /**
- * Find all injured allies at a specific range from the monk
+ * Get the most injured ally from a list (lowest health percentage)
  */
-const findInjuredAlliesAtRange = (monkPosition: UnitPosition, range: number) => {
+const getMostInjuredAlly = (allies: any[]) => {
+  let mostInjuredAlly = allies[0]
+  let lowestHealthPercent = (mostInjuredAlly.currentHealth || 0) / (mostInjuredAlly.maxHealth || 1)
+  
+  for (const ally of allies) {
+    const healthPercent = (ally.currentHealth || 0) / (ally.maxHealth || 1)
+    if (healthPercent < lowestHealthPercent) {
+      mostInjuredAlly = ally
+      lowestHealthPercent = healthPercent
+    }
+  }
+  return mostInjuredAlly
+}
+
+/**
+ * Find all injured allies on all walls (for bishop) - excludes the bishop itself
+ */
+const findAllInjuredAllies = (bishopPosition: UnitPosition) => {
+  const allInjured: any[] = []
+  const walls = [
+    { wallType: 'left' as const, cells: leftWallCells },
+    { wallType: 'right' as const, cells: rightWallCells },
+    { wallType: 'bottom' as const, cells: bottomWallCells }
+  ]
+  
+  for (const wall of walls) {
+    for (let i = 0; i < wall.cells.length; i++) {
+      const cell = wall.cells[i]
+      if (cell && cell.isOccupied && cell.currentHealth !== undefined && cell.maxHealth !== undefined) {
+        // Exclude the bishop itself
+        if (wall.wallType === bishopPosition.wallType && i === bishopPosition.cellIndex) {
+          continue
+        }
+        
+        if (cell.currentHealth < cell.maxHealth) {
+          allInjured.push({
+            wallType: wall.wallType,
+            cellIndex: i,
+            wallCell: cell,
+            currentHealth: cell.currentHealth,
+            maxHealth: cell.maxHealth
+          })
+        }
+      }
+    }
+  }
+  
+  return allInjured
+}
+
+/**
+ * Find ally with lowest current health percentage for max health boost
+ */
+const findLowestHealthAllyForBoost = (bishopPosition: UnitPosition) => {
+  const allAllies: any[] = []
+  const walls = [
+    { wallType: 'left' as const, cells: leftWallCells },
+    { wallType: 'right' as const, cells: rightWallCells },
+    { wallType: 'bottom' as const, cells: bottomWallCells }
+  ]
+  
+  for (const wall of walls) {
+    for (let i = 0; i < wall.cells.length; i++) {
+      const cell = wall.cells[i]
+      if (cell && cell.isOccupied && cell.currentHealth !== undefined && cell.maxHealth !== undefined) {
+        // Exclude the bishop itself
+        if (wall.wallType === bishopPosition.wallType && i === bishopPosition.cellIndex) {
+          continue
+        }
+        
+        allAllies.push({
+          wallType: wall.wallType,
+          cellIndex: i,
+          wallCell: cell,
+          currentHealth: cell.currentHealth,
+          maxHealth: cell.maxHealth
+        })
+      }
+    }
+  }
+  
+  if (allAllies.length === 0) return null
+  
+  // Find ally with lowest current health
+  let lowestHealthAlly = allAllies[0]
+  let lowestHealth = lowestHealthAlly.currentHealth
+  
+  for (const ally of allAllies) {
+    if (ally.currentHealth < lowestHealth) {
+      lowestHealthAlly = ally
+      lowestHealth = ally.currentHealth
+    }
+  }
+  
+  return lowestHealthAlly
+}
+
+/**
+ * Find all injured allies at a specific range from the monk/bishop - excludes the healer itself
+ */
+const findInjuredAlliesAtRange = (healerPosition: UnitPosition, range: number) => {
   const injuredAtRange: Array<{
     wallType: 'left' | 'right' | 'bottom',
     cellIndex: number,
@@ -609,10 +826,10 @@ const findInjuredAlliesAtRange = (monkPosition: UnitPosition, range: number) => 
   let wallCells: any[]
   let maxCells: number
   
-  if (monkPosition.wallType === 'left') {
+  if (healerPosition.wallType === 'left') {
     wallCells = leftWallCells
     maxCells = leftWallCells.length
-  } else if (monkPosition.wallType === 'right') {
+  } else if (healerPosition.wallType === 'right') {
     wallCells = rightWallCells
     maxCells = rightWallCells.length
   } else {
@@ -622,17 +839,22 @@ const findInjuredAlliesAtRange = (monkPosition: UnitPosition, range: number) => 
   
   // Check cells at exactly this range
   const checkIndexes = [
-    monkPosition.cellIndex - range, // Left/above
-    monkPosition.cellIndex + range  // Right/below
+    healerPosition.cellIndex - range, // Left/above
+    healerPosition.cellIndex + range  // Right/below
   ]
   
   for (const i of checkIndexes) {
     if (i >= 0 && i < maxCells) {
       const cell = wallCells[i]
       if (cell && cell.isOccupied && cell.currentHealth !== undefined && cell.maxHealth !== undefined) {
+        // Exclude the healer itself
+        if (i === healerPosition.cellIndex) {
+          continue
+        }
+        
         if (cell.currentHealth < cell.maxHealth) {
           injuredAtRange.push({
-            wallType: monkPosition.wallType,
+            wallType: healerPosition.wallType,
             cellIndex: i,
             wallCell: cell,
             currentHealth: cell.currentHealth,
@@ -742,7 +964,9 @@ const performRangedAttack = (position: UnitPosition, unitType: string, currentTi
     lifespan: PROJECTILE_LIFESPAN_MS,
     size: adjustedSize,
     unitType, // Store which unit type fired this projectile
-    isActive: true
+    isActive: true,
+    recentlyHitCells: unitType === 'lancer' ? new Set<string>() : undefined, // Track hit cells for penetrating spears
+    enemyKillCount: unitType === 'lancer' ? 0 : undefined // Track enemy kills for lancer spears
   }
   
   projectiles.push(projectile)
@@ -786,64 +1010,92 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
     projectile.y += projectile.directionY * projectile.speed * (deltaTime / 1000)
     
     // Check for collision with enemies
-    const hitEnemy = checkProjectileEnemyCollision(projectile)
-    if (hitEnemy) {
-      // Deal damage based on unit type that fired the projectile
-      let damage = ALLY_UNITS.BOWMAN.damage // Default to bowman damage
-      if (projectile.unitType === 'lancer') {
-        damage = ALLY_UNITS.BOWMAN.damage // Lancer has same damage as bowman base
-      } else if (projectile.unitType === ALLY_UNITS.BOWMAN.id) {
-        damage = ALLY_UNITS.BOWMAN.damage
-      }
-      hitEnemy.health -= damage
+    const collisionResult = checkProjectileEnemyCollision(projectile)
+    if (collisionResult) {
+      const { enemy: hitEnemy, hitCells } = collisionResult
       
-      // Add pain effect for visual feedback
-      addPainEffect(hitEnemy)
+      // Filter out cells that have already been hit by this projectile
+      const newlyHitCells = projectile.unitType === 'lancer' && projectile.recentlyHitCells 
+        ? hitCells.filter(cell => !projectile.recentlyHitCells!.has(cell))
+        : hitCells
       
-      // Spawn flying damage number
-      spawnDamageNumber(hitEnemy, damage)
-      
-      // Add hit animation scaled to enemy size
-      // Calculate visible portion for partially hidden enemies
-      const visibleStartY = Math.max(hitEnemy.y, 0)
-      const visibleEndY = Math.min(hitEnemy.y + hitEnemy.type.height, LEVEL_HEIGHT)
-      const visibleHeight = Math.max(0, visibleEndY - visibleStartY)
-      
-      hitAnimations.push({
-        battlefieldCol: hitEnemy.x,
-        battlefieldRow: visibleStartY, // Use actual visible start, not clamped enemy position
-        enemyWidth: hitEnemy.type.width,
-        enemyHeight: visibleHeight, // Use visible height only
-        startTime: currentTime,
-        duration: HIT_ANIMATION_DURATION_MS,
-        isActive: true
-      })
-      
-      // Add combat log
-      addLogMessage(`${hitEnemy.type.name} is hit for ${damage} damage`)
-      
-      // Check if enemy should be removed
-      if (hitEnemy.health <= 0) {
-        // Check if enemy drops loot based on their lootChance
-        if (Math.random() <= hitEnemy.type.lootChance) {
-          // 95% chance for gold, 5% chance for diamond
-          if (Math.random() <= 0.95) {
-            spawnCoin(hitEnemy) // Spawn gold coin
-          } else {
-            spawnDiamond(hitEnemy) // Spawn diamond
-          }
+      if (newlyHitCells.length > 0) {
+        // Calculate damage per cell based on unit type
+        let damagePerCell = ALLY_UNITS.BOWMAN.damage // Default to bowman damage
+        if (projectile.unitType === 'lancer') {
+          damagePerCell = ALLY_UNITS.BOWMAN.damage * LANCER_DAMAGE_MULTIPLIER // 2x bowman damage
+        } else if (projectile.unitType === ALLY_UNITS.BOWMAN.id) {
+          damagePerCell = ALLY_UNITS.BOWMAN.damage
         }
         
-        // Spawn icicle projectiles if this is an Ice Golem dying
-        spawnIcicleProjectiles(hitEnemy, currentTime)
+        // Deal damage for each newly hit cell
+        const totalDamage = newlyHitCells.length * damagePerCell
+        hitEnemy.health -= totalDamage
         
-        removeEnemy(hitEnemy)
-        // addLogMessage(`${hitEnemy.type.name} is defeated!`) // Removed - not very useful
+        // Track newly hit cells for penetrating projectiles
+        if (projectile.unitType === 'lancer' && projectile.recentlyHitCells) {
+          newlyHitCells.forEach(cell => projectile.recentlyHitCells!.add(cell))
+        }
+        
+        // Add pain effect for visual feedback
+        addPainEffect(hitEnemy)
+        
+        // Spawn flying damage number showing total damage
+        spawnDamageNumber(hitEnemy, totalDamage)
+        
+        // Add hit animation scaled to enemy size
+        hitAnimations.push({
+          enemyUuid: hitEnemy.uuid,
+          enemyWidth: hitEnemy.type.width,
+          enemyHeight: hitEnemy.type.height, // Use full enemy height
+          startTime: currentTime,
+          duration: HIT_ANIMATION_DURATION_MS,
+          isActive: true
+        })
+        
+        // Add combat log
+        addLogMessage(COMBAT_MESSAGES.enemyHit(hitEnemy.type.name, totalDamage))
+        
+        // Check if enemy should be removed
+        if (hitEnemy.health <= 0) {
+          // Track enemy kill for lancer spear multikill challenge
+          if (projectile.unitType === 'lancer' && projectile.enemyKillCount !== undefined) {
+            projectile.enemyKillCount++
+            
+            // Check if this spear has killed 5 enemies
+            if (projectile.enemyKillCount >= 5) {
+              incrementSpearMultikills()
+            }
+          }
+          
+          // Track ogre kills for challenge system
+          if (hitEnemy.type.id === 'ogre') {
+            incrementOgreKills()
+          }
+          
+          // Check if enemy drops loot based on their lootChance
+          if (Math.random() <= hitEnemy.type.lootChance) {
+            // 95% chance for gold, 5% chance for diamond
+            if (Math.random() <= 0.95) {
+              spawnCoin(hitEnemy) // Spawn gold coin
+            } else {
+              spawnDiamond(hitEnemy) // Spawn diamond
+            }
+          }
+          
+          // Spawn icicle projectiles if this is an Ice Golem dying
+          spawnIcicleProjectiles(hitEnemy, currentTime)
+          
+          removeEnemy(hitEnemy)
+          // addLogMessage(`${hitEnemy.type.name} is defeated!`) // Removed - not very useful
+        }
+        
+        // Lancer spears penetrate through enemies, arrows stop on first hit
+        if (projectile.unitType !== 'lancer') {
+          projectile.isActive = false
+          return false
+        }
       }
-      
-      // Remove projectile after hit
-      projectile.isActive = false
-      return false
     }
     
     // Check if projectile has left extended bounds (includes walls and beyond battlefield)
@@ -863,38 +1115,60 @@ const updateProjectiles = (deltaTime: number, currentTime: number) => {
 }
 
 /**
- * Check if projectile collides with any enemy
+ * Check if projectile collides with any enemy and return collision details
  */
-const checkProjectileEnemyCollision = (projectile: Projectile): any => {
+const checkProjectileEnemyCollision = (projectile: Projectile): {enemy: any, hitCells: string[]} | null => {
   const enemies = getEnemiesInProcessingOrder() // Get all active enemies
   
   for (const enemy of enemies) {
-    // Calculate enemy bounds in canvas coordinates
-    const enemyCoords = getBattlefieldCellCoords(enemy.x, Math.max(enemy.y, 0))
-    const enemyWidth = enemy.type.width * BATTLEFIELD_CELL_SIZE
-    const enemyHeight = Math.min(enemy.type.height, enemy.y + enemy.type.height) * BATTLEFIELD_CELL_SIZE // Only visible part
-    
-    // Check collision using simple AABB (axis-aligned bounding box)
-    const projectileLeft = projectile.x - projectile.size / 2
-    const projectileRight = projectile.x + projectile.size / 2
-    const projectileTop = projectile.y - projectile.size / 2
-    const projectileBottom = projectile.y + projectile.size / 2
-    
-    const enemyLeft = enemyCoords.x
-    const enemyRight = enemyCoords.x + enemyWidth
-    const enemyTop = enemyCoords.y
-    const enemyBottom = enemyCoords.y + enemyHeight
-    
-    // AABB collision detection
-    if (projectileLeft < enemyRight && 
-        projectileRight > enemyLeft && 
-        projectileTop < enemyBottom && 
-        projectileBottom > enemyTop) {
-      return enemy // Collision detected
+    const hitCells = getProjectileEnemyCellOverlaps(projectile, enemy)
+    if (hitCells.length > 0) {
+      return { enemy, hitCells }
     }
   }
   
   return null // No collision
+}
+
+/**
+ * Get which specific cells of an enemy the projectile overlaps with
+ */
+const getProjectileEnemyCellOverlaps = (projectile: Projectile, enemy: any): string[] => {
+  const hitCells: string[] = []
+  
+  // Check each cell of the enemy
+  for (let dy = 0; dy < enemy.type.height; dy++) {
+    for (let dx = 0; dx < enemy.type.width; dx++) {
+      const cellX = enemy.x + dx
+      const cellY = enemy.y + dy
+      
+      // Skip cells that are above the visible battlefield
+      if (cellY < 0) continue
+      
+      // Get canvas coordinates for this cell
+      const cellCoords = getBattlefieldCellCoords(cellX, cellY)
+      const cellLeft = cellCoords.x
+      const cellRight = cellCoords.x + BATTLEFIELD_CELL_SIZE
+      const cellTop = cellCoords.y
+      const cellBottom = cellCoords.y + BATTLEFIELD_CELL_SIZE
+      
+      // Check projectile collision with this specific cell
+      const projectileLeft = projectile.x - projectile.size / 2
+      const projectileRight = projectile.x + projectile.size / 2
+      const projectileTop = projectile.y - projectile.size / 2
+      const projectileBottom = projectile.y + projectile.size / 2
+      
+      // AABB collision detection with this cell
+      if (projectileLeft < cellRight && 
+          projectileRight > cellLeft && 
+          projectileTop < cellBottom && 
+          projectileBottom > cellTop) {
+        hitCells.push(`${cellX},${cellY}`)
+      }
+    }
+  }
+  
+  return hitCells
 }
 
 /**
@@ -916,9 +1190,6 @@ const updateEnemyProjectiles = (deltaTime: number, currentTime: number) => {
     if (hitWallUnit) {
       // Deal damage to wall unit
       damageAlly(hitWallUnit.wallType, hitWallUnit.cellIndex, projectile.damage, null)
-      
-      // Add combat log
-      addLogMessage(`Wall unit hit for ${projectile.damage} damage by ${projectile.projectileType}`)
       
       // Remove projectile after hit
       projectile.isActive = false
@@ -1141,8 +1412,7 @@ export const spawnIcicleProjectiles = (enemy: any, currentTime: number) => {
   // Add all projectiles
   enemyProjectiles.push(leftProjectile, rightProjectile, bottomProjectile)
   
-  // Add combat log
-  addLogMessage(`Ice Golem launches 3 icicle projectiles!`)
+
 }
 
 /**
@@ -1207,6 +1477,14 @@ const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
   hitAnimations.forEach(anim => {
     if (!anim.isActive) return
     
+    // Find the enemy this animation is tracking
+    const enemy = enemies.find(e => e.uuid === anim.enemyUuid)
+    if (!enemy) {
+      // Enemy was destroyed, mark animation as inactive
+      anim.isActive = false
+      return
+    }
+    
     const progress = (currentTime - anim.startTime) / anim.duration
     let intensity: number
     
@@ -1218,25 +1496,35 @@ const renderHitAnimations = (ctx: CanvasRenderingContext2D) => {
       intensity = 1.0 - ((progress - 0.2) / 0.8)
     }
     
-    // Red color interpolation - ends at dark brown instead of black
-    const r = Math.floor(255 * Math.max(intensity, 0.3)) // Don't go below dark brown red
-    const g = Math.floor(50 * Math.max(intensity, 0.2)) // Add some green for brown tint
+    // Red color interpolation - stay closer to red, don't go as dark
+    const r = Math.floor(255 * Math.max(intensity, 0.6)) // Don't go below 60% red intensity
+    const g = Math.floor(80 * Math.max(intensity, 0.3))  // Less green for more red color
     const b = Math.floor(0 * intensity)   // No blue
     
-    // Use battlefieldToCanvas for precise cell boundary alignment
-    const coords = battlefieldToCanvas(anim.battlefieldRow, anim.battlefieldCol)
+    // Get current enemy position (follows moving enemies)
+    const visibleStartY = Math.max(enemy.y, 0)
+    const coords = battlefieldToCanvas(visibleStartY, enemy.x)
+    
+    // Calculate visible portion for partially hidden enemies
+    const visibleEndY = Math.min(enemy.y + enemy.type.height, LEVEL_HEIGHT)
+    const visibleHeight = Math.max(0, visibleEndY - visibleStartY)
+    
+    if (visibleHeight <= 0) {
+      // Enemy is completely above visible area
+      return
+    }
     
     ctx.save()
     ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
     const lineWidth = 6 // Thick red border
     ctx.lineWidth = lineWidth
     
-    // Calculate multi-cell dimensions (including borders between cells)
-    const totalWidth = anim.enemyWidth * BATTLEFIELD_CELL_SIZE + (anim.enemyWidth - 1) * BATTLEFIELD_CELL_BORDER_WIDTH
-    const totalHeight = anim.enemyHeight * BATTLEFIELD_CELL_SIZE + (anim.enemyHeight - 1) * BATTLEFIELD_CELL_BORDER_WIDTH
+    // Calculate multi-cell dimensions (including borders between cells) for visible portion
+    const totalWidth = enemy.type.width * BATTLEFIELD_CELL_SIZE + (enemy.type.width - 1) * BATTLEFIELD_CELL_BORDER_WIDTH
+    const totalHeight = visibleHeight * BATTLEFIELD_CELL_SIZE + (visibleHeight - 1) * BATTLEFIELD_CELL_BORDER_WIDTH
     
-    // Draw inner rounded rectangle for hit animation scaled to enemy size
-    // Adjust coordinates and size to draw inside the enemy's total area
+    // Draw inner rounded rectangle for hit animation scaled to visible enemy size
+    // Adjust coordinates and size to draw inside the enemy's visible area
     const inset = lineWidth / 2 // Move inward by half the line width
     const innerX = coords.x + inset
     const innerY = coords.y + inset

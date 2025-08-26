@@ -29,13 +29,42 @@ export const renderChallenges = (ctx: CanvasRenderingContext2D) => {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
   
-  challenges.forEach((challenge, index) => {
+  const maxWidth = CHALLENGES_WIDTH - 30 // Leave 15px padding on each side
+  const lineHeight = 20 // Line height for wrapped text
+  
+  challenges.forEach((challenge) => {
     const text = formatChallengeText(challenge)
     const color = getChallengeTextColor(challenge)
-    const textY = CHALLENGES_Y + yOffset + (index * 30) // 30px between challenges
+    const textY = CHALLENGES_Y + yOffset
     
-    // Use left-aligned text positioning like logs section
     ctx.fillStyle = color
-    ctx.fillText(text, CHALLENGES_X + 15, textY) // 15px padding from left edge
+    
+    // Word wrap and render the text
+    const words = text.split(' ')
+    let line = ''
+    let lineY = textY
+    
+    for (const word of words) {
+      const testLine = line + (line ? ' ' : '') + word
+      const metrics = ctx.measureText(testLine)
+      
+      if (metrics.width > maxWidth && line !== '') {
+        // Draw the current line and start a new one
+        ctx.fillText(line, CHALLENGES_X + 15, lineY) // 15px padding from left edge
+        line = word
+        lineY += lineHeight
+      } else {
+        line = testLine
+      }
+    }
+    
+    // Draw the final line
+    if (line) {
+      ctx.fillText(line, CHALLENGES_X + 15, lineY) // 15px padding from left edge
+    }
+    
+    // Calculate how many lines this challenge used and update yOffset
+    const linesUsed = Math.max(1, Math.ceil(words.length > 0 ? (lineY - textY) / lineHeight + 1 : 1))
+    yOffset += linesUsed * lineHeight + 10 // 10px spacing between challenges
   })
 }

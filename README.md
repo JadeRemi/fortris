@@ -6,12 +6,20 @@ A casual pixel-style game built with React, TypeScript, and Vite.
 
 ```bash
 yarn dev          # Start development server
-yarn build        # Build for production
-yarn test         # Run tests (watch mode)
-yarn test:run     # Run tests once
+yarn build        # Build for production  
+yarn test         # Run tests once and exit (CI-friendly)
+yarn test:watch   # Run tests in watch mode (for development)
+yarn test:ui      # Run tests with UI interface
 yarn lint         # Run ESLint
 yarn deploy       # Deploy to GitHub Pages
 ```
+
+### ⚠️ Testing Important Notes
+
+- **`yarn test`** - Runs tests **once** and exits (use for CI/automated testing)
+- **`yarn test:watch`** - Runs tests in **watch mode** (waits for file changes)
+- If tests seem to "hang", you're likely in watch mode - press `q` to quit
+- Always use `yarn test` for build verification to avoid infinite waiting
 
 ## Deployment
 

@@ -8,12 +8,15 @@ import {
   SWORDSMAN_CELL_X, SWORDSMAN_CELL_Y,
   BOWMAN_CELL_X, BOWMAN_CELL_Y,
   MONK_CELL_X, MONK_CELL_Y,
-  INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT, INITIAL_MONK_COUNT, ARMY_BUY_BUTTON_GAP
+  INITIAL_SWORDSMAN_COUNT, INITIAL_BOWMAN_COUNT, INITIAL_MONK_COUNT, ARMY_BUY_BUTTON_GAP,
+  SWORDSMAN_PRICE, BOWMAN_PRICE, MONK_PRICE, BUY_BUTTON_COIN_ICON_SIZE
 } from '../config/gameConfig'
 import { TEXT_PRIMARY, BATTLEFIELD_CELL_BORDER, BATTLEFIELD_CELL_EMPTY } from '../config/palette'
 import { getUnitById, ALLY_UNITS } from '../config/allUnitsConfig'
 import { placeUnitOnWall } from './wallExtensions'
 import { showTooltip, hideTooltip, isPointInRect } from './tooltipUtils'
+import { getCollectedCoinCount, addCoins } from './coinUtils'
+import { incrementMonksBought } from './challengeSystem'
 
 // Army unit selection state
 interface ArmyUnitState {
@@ -665,7 +668,9 @@ const renderSwordsmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number
   
   // Check if any unit or upgrade is currently selected
   const selectionState = getSelectionState()
-  const isDisabled = selectionState.isAnySelected
+  const currentCoins = getCollectedCoinCount()
+  const canAfford = currentCoins >= SWORDSMAN_PRICE
+  const isDisabled = selectionState.isAnySelected || !canAfford
   
   // Check if mouse is hovering over this button
   const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
@@ -710,6 +715,37 @@ const renderSwordsmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number
     ctx.fillText('+', cellX + cellSize / 2, cellY + cellSize / 2)
   }
   
+  // Draw price at bottom center (always visible)
+  ctx.fillStyle = TEXT_PRIMARY // Always use primary color for better visibility
+  ctx.font = '10px "Pixelify Sans", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  
+  // Draw price number
+  const priceText = SWORDSMAN_PRICE.toString()
+  const textWidth = ctx.measureText(priceText).width
+  const priceY = cellY + cellSize - 8 // Near bottom of button
+  ctx.fillText(priceText, cellX + cellSize / 2 - 6, priceY)
+  
+  // Draw coin icon next to price
+  try {
+    const coinImage = getCachedImage(getImagePath('coin.png'))
+    if (coinImage) {
+      const iconSize = BUY_BUTTON_COIN_ICON_SIZE
+      const iconX = cellX + cellSize / 2 + textWidth / 2 - 4
+      const iconY = priceY - iconSize / 2
+      ctx.drawImage(coinImage, iconX, iconY, iconSize, iconSize)
+    }
+  } catch (error) {
+    // Fallback: draw circle
+    ctx.save()
+    ctx.fillStyle = '#FFD700' // Gold
+    ctx.beginPath()
+    ctx.arc(cellX + cellSize / 2 + textWidth / 2 - 2, priceY, BUY_BUTTON_COIN_ICON_SIZE / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+  
   ctx.restore()
 }
 
@@ -723,7 +759,9 @@ const renderBowmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 
   
   // Check if any unit or upgrade is currently selected
   const selectionState = getSelectionState()
-  const isDisabled = selectionState.isAnySelected
+  const currentCoins = getCollectedCoinCount()
+  const canAfford = currentCoins >= BOWMAN_PRICE
+  const isDisabled = selectionState.isAnySelected || !canAfford
   
   // Check if mouse is hovering over this button
   const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
@@ -766,6 +804,37 @@ const renderBowmanPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('+', cellX + cellSize / 2, cellY + cellSize / 2)
+  }
+  
+  // Draw price at bottom center (always visible)
+  ctx.fillStyle = TEXT_PRIMARY // Always use primary color for better visibility
+  ctx.font = '10px "Pixelify Sans", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  
+  // Draw price number
+  const priceText = BOWMAN_PRICE.toString()
+  const textWidth = ctx.measureText(priceText).width
+  const priceY = cellY + cellSize - 8 // Near bottom of button
+  ctx.fillText(priceText, cellX + cellSize / 2 - 6, priceY)
+  
+  // Draw coin icon next to price
+  try {
+    const coinImage = getCachedImage(getImagePath('coin.png'))
+    if (coinImage) {
+      const iconSize = BUY_BUTTON_COIN_ICON_SIZE
+      const iconX = cellX + cellSize / 2 + textWidth / 2 - 4
+      const iconY = priceY - iconSize / 2
+      ctx.drawImage(coinImage, iconX, iconY, iconSize, iconSize)
+    }
+  } catch (error) {
+    // Fallback: draw circle
+    ctx.save()
+    ctx.fillStyle = '#FFD700' // Gold
+    ctx.beginPath()
+    ctx.arc(cellX + cellSize / 2 + textWidth / 2 - 2, priceY, BUY_BUTTON_COIN_ICON_SIZE / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
   
   ctx.restore()
@@ -824,7 +893,9 @@ const renderMonkPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 0,
   
   // Check if any unit or upgrade is currently selected
   const selectionState = getSelectionState()
-  const isDisabled = selectionState.isAnySelected
+  const currentCoins = getCollectedCoinCount()
+  const canAfford = currentCoins >= MONK_PRICE
+  const isDisabled = selectionState.isAnySelected || !canAfford
   
   // Check if mouse is hovering over this button
   const isHovered = !isDisabled && isPointInRect(mouseX, mouseY, cellX, cellY, cellSize, cellSize)
@@ -867,6 +938,37 @@ const renderMonkPlusButton = (ctx: CanvasRenderingContext2D, mouseX: number = 0,
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('+', cellX + cellSize / 2, cellY + cellSize / 2)
+  }
+  
+  // Draw price at bottom center (always visible)
+  ctx.fillStyle = TEXT_PRIMARY // Always use primary color for better visibility
+  ctx.font = '10px "Pixelify Sans", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  
+  // Draw price number
+  const priceText = MONK_PRICE.toString()
+  const textWidth = ctx.measureText(priceText).width
+  const priceY = cellY + cellSize - 8 // Near bottom of button
+  ctx.fillText(priceText, cellX + cellSize / 2 - 6, priceY)
+  
+  // Draw coin icon next to price
+  try {
+    const coinImage = getCachedImage(getImagePath('coin.png'))
+    if (coinImage) {
+      const iconSize = BUY_BUTTON_COIN_ICON_SIZE
+      const iconX = cellX + cellSize / 2 + textWidth / 2 - 4
+      const iconY = priceY - iconSize / 2
+      ctx.drawImage(coinImage, iconX, iconY, iconSize, iconSize)
+    }
+  } catch (error) {
+    // Fallback: draw circle
+    ctx.save()
+    ctx.fillStyle = '#FFD700' // Gold
+    ctx.beginPath()
+    ctx.arc(cellX + cellSize / 2 + textWidth / 2 - 2, priceY, BUY_BUTTON_COIN_ICON_SIZE / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
   
   ctx.restore()
@@ -933,8 +1035,18 @@ const handleMonkPlusClick = (renderCallback?: () => void) => {
     return // Ignore click when disabled
   }
 
-  // Increment monk count
+  // Check if player can afford the purchase
+  const currentCoins = getCollectedCoinCount()
+  if (currentCoins < MONK_PRICE) {
+    return // Cannot afford the purchase
+  }
+
+  // Deduct the cost and add the unit
+  addCoins(-MONK_PRICE)
   monkState.count++
+  
+  // Track for challenge system
+  incrementMonksBought()
   
   // Re-render if callback provided
   if (renderCallback) {
@@ -952,6 +1064,14 @@ const handleSwordsmanPlusClick = (renderCallback?: () => void) => {
     return // Ignore click when disabled
   }
   
+  // Check if player can afford the purchase
+  const currentCoins = getCollectedCoinCount()
+  if (currentCoins < SWORDSMAN_PRICE) {
+    return // Cannot afford the purchase
+  }
+  
+  // Deduct the cost and add the unit
+  addCoins(-SWORDSMAN_PRICE)
   swordsmanState.count += 1
   if (renderCallback) renderCallback()
 }
@@ -966,6 +1086,14 @@ const handleBowmanPlusClick = (renderCallback?: () => void) => {
     return // Ignore click when disabled
   }
   
+  // Check if player can afford the purchase
+  const currentCoins = getCollectedCoinCount()
+  if (currentCoins < BOWMAN_PRICE) {
+    return // Cannot afford the purchase
+  }
+  
+  // Deduct the cost and add the unit
+  addCoins(-BOWMAN_PRICE)
   bowmanState.count += 1
   if (renderCallback) renderCallback()
 }

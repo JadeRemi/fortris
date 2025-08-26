@@ -123,10 +123,18 @@ export const rollIndependentEnemySpawns = (): EnemyType[] => {
 // Find valid spawn position for enemy type
 export const findSpawnPosition = (enemyType: EnemyType): { x: number; y: number } | null => {
   // Calculate spawn Y based on enemy height for gradual reveal
-  // 1x1 enemies start at y=0 (immediately visible)
-  // 2x2 enemies start at y=-1 (only bottom row visible initially)
-  // 3x3 enemies start at y=-2 (only bottom row visible initially)
-  const spawnY = 0 - (enemyType.height - 1)
+  // We want exactly 1 row visible initially (bottom row at y=0)
+  // So enemy top-left should be at y = 0 - (height - 1)
+  // Examples:
+  // - 1x1: spawnY = 0 - (1-1) = 0 (fully visible)
+  // - 2x2: spawnY = 0 - (2-1) = -1 (rows: -1,0 -> only row 0 visible)
+  // - 3x3: spawnY = 0 - (3-1) = -2 (rows: -2,-1,0 -> only row 0 visible)
+  const spawnY = -(enemyType.height - 1)
+  
+  // Debug spawn positioning (disabled for production)
+  // if (enemyType.height > 1) {
+  //   console.log(`🏗️ Spawn calc for ${enemyType.name}: spawnY=${spawnY}`)  
+  // }
   
   // Collect all valid positions
   const validPositions: number[] = []
@@ -206,6 +214,11 @@ export const spawnEnemy = (enemyType: EnemyType): boolean => {
   
   enemies.push(newEnemy)
   
+  // Debug successful spawn (disabled for production)
+  // if (enemyType.height > 1) {
+  //   console.log(`✅ Spawned ${enemyType.name} at (${position.x}, ${position.y})`)
+  // }
+  
   // Mark battlefield cells as occupied
   for (let dy = 0; dy < enemyType.height; dy++) {
     for (let dx = 0; dx < enemyType.width; dx++) {
@@ -282,6 +295,12 @@ export const processEnemyTurn = (): void => {
   const orderedEnemies = getEnemiesInProcessingOrder()
   
   for (const enemy of orderedEnemies) {
+    // Don't move enemies on their first turn to allow proper gradual reveal
+    if (enemy.turnsSinceSpawn === 0) {
+      enemy.turnsSinceSpawn += 1
+      continue
+    }
+    
     // Try to move first
     const moved = moveEnemyDown(enemy)
     
@@ -738,8 +757,10 @@ export const renderEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy): void =
   const spriteStartRow = visibleStartY - enemy.y // Row offset from top of enemy sprite
   const spriteRows = visibleRows // Number of rows to draw from sprite
 
-  // Debug multi-cell enemy rendering - remove in production
-  // console.log(`Rendering ${enemy.type.name} at y=${enemy.y}, visible=${visibleStartY}-${visibleEndY}, spriteRow=${spriteStartRow}, rows=${spriteRows}`)
+  // Debug multi-cell enemy rendering (disabled for production)
+  // if (enemy.type.height > 1) {
+  //   console.log(`🐛 Rendering ${enemy.type.name}: y=${enemy.y}, visible=${visibleStartY}-${visibleEndY}, rows=${spriteRows}`)
+  // }
 
   // Get battlefield position for rendering (top-left of visible area)
   // Use battlefieldToCanvas for proper cell boundary alignment

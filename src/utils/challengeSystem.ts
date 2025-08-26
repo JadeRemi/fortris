@@ -13,11 +13,18 @@ interface Challenge {
   target: number
   current: number
   isCompleted: boolean
+  type: 'incremental' | 'simultaneous' // Type determines display and logic
   condition: () => number // Function that returns current progress
 }
 
 // Active challenges
 let challenges: Challenge[] = []
+
+// Global counters for incremental challenges
+let ogresKilled = 0
+let monksBought = 0
+let unitsReached200Health = 0
+let spearMultikills = 0
 
 /**
  * Initialize challenge system with default challenges
@@ -31,9 +38,49 @@ export const initializeChallenges = (): void => {
       target: CHALLENGE_TARGETS.BISHOPS_COUNT,
       current: 0,
       isCompleted: false,
+      type: 'simultaneous',
       condition: () => countUnitsOnWalls('bishop')
+    },
+    {
+      id: 'kill_50_ogres',
+      name: 'Ogre Slayer',
+      description: `Kill ${CHALLENGE_TARGETS.OGRES_KILLED} Ogres`,
+      target: CHALLENGE_TARGETS.OGRES_KILLED,
+      current: 0,
+      isCompleted: false,
+      type: 'incremental',
+      condition: () => ogresKilled
+    },
+    {
+      id: 'buy_30_monks',
+      name: 'Monk Recruiter',
+      description: `Buy ${CHALLENGE_TARGETS.MONKS_BOUGHT} Monks`,
+      target: CHALLENGE_TARGETS.MONKS_BOUGHT,
+      current: 0,
+      isCompleted: false,
+      type: 'incremental',
+      condition: () => monksBought
+    },
+    {
+      id: 'reach_200_health',
+      name: 'Health Master',
+      description: `Have unit reach 200 health`,
+      target: CHALLENGE_TARGETS.UNITS_REACH_200_HEALTH,
+      current: 0,
+      isCompleted: false,
+      type: 'simultaneous',
+      condition: () => unitsReached200Health
+    },
+    {
+      id: 'spear_multikill',
+      name: 'Spear Master',
+      description: `Kill 5 enemies with 1 spear`,
+      target: CHALLENGE_TARGETS.SPEAR_MULTIKILLS,
+      current: 0,
+      isCompleted: false,
+      type: 'simultaneous',
+      condition: () => spearMultikills
     }
-    // More challenges can be added here
   ]
 }
 
@@ -69,15 +116,30 @@ export const updateChallengeProgress = async (): Promise<void> => {
       // Get current progress
       const newProgress = challenge.condition()
       
-      // Update progress if it increased (never decrease)
-      if (newProgress > challenge.current) {
-        challenge.current = newProgress
-        
-        // Check if completed
-        if (challenge.current >= challenge.target) {
-          challenge.isCompleted = true
-          console.log(`🏆 Challenge completed: ${challenge.description}`)
+      // Update progress based on challenge type
+      if (challenge.type === 'incremental') {
+        // For incremental: only increase, never decrease
+        if (newProgress > challenge.current) {
+          challenge.current = newProgress
         }
+      } else if (challenge.type === 'simultaneous') {
+        // For simultaneous: always use current value, can go up or down
+        // Exception: for achievement-style challenges, don't decrease once completed
+        if (challenge.id === 'reach_200_health' || challenge.id === 'spear_multikill') {
+          // Achievement-style: only increase, never decrease
+          if (newProgress > challenge.current) {
+            challenge.current = newProgress
+          }
+        } else {
+          // True simultaneous: can go up or down (like bishop count)
+          challenge.current = newProgress
+        }
+      }
+      
+      // Check if completed
+      if (challenge.current >= challenge.target) {
+        challenge.isCompleted = true
+        console.log(`🏆 Challenge completed: ${challenge.description}`)
       }
     }
   } catch (error) {
@@ -98,7 +160,9 @@ export const getChallenges = (): Challenge[] => {
  */
 export const formatChallengeText = (challenge: Challenge): string => {
   const prefix = challenge.isCompleted ? CHECKMARK : ' '
-  const progress = challenge.isCompleted ? '' : ` (${challenge.current}/${challenge.target})`
+  // Only show progress for incremental challenges, hide for simultaneous
+  const progress = challenge.isCompleted ? '' : 
+    (challenge.type === 'incremental' ? ` (${challenge.current}/${challenge.target})` : '')
   return `${prefix} ${challenge.description}${progress}`
 }
 
@@ -107,4 +171,46 @@ export const formatChallengeText = (challenge: Challenge): string => {
  */
 export const getChallengeTextColor = (challenge: Challenge): string => {
   return challenge.isCompleted ? '#4CAF50' : '#f5f5f5' // Green if completed, otherwise white
+}
+
+/**
+ * Increment ogre kill count for challenge tracking
+ */
+export const incrementOgreKills = (): void => {
+  ogresKilled++
+}
+
+/**
+ * Increment monk purchase count for challenge tracking
+ */
+export const incrementMonksBought = (): void => {
+  monksBought++
+}
+
+/**
+ * Increment units reached 200 health count for challenge tracking
+ */
+export const incrementUnitsReached200Health = (): void => {
+  unitsReached200Health++
+}
+
+/**
+ * Increment spear multikill count for challenge tracking
+ */
+export const incrementSpearMultikills = (): void => {
+  spearMultikills++
+}
+
+/**
+ * Reset all challenge progress (for game restart)
+ */
+export const resetChallengeProgress = (): void => {
+  ogresKilled = 0
+  monksBought = 0
+  unitsReached200Health = 0
+  spearMultikills = 0
+  for (const challenge of challenges) {
+    challenge.current = 0
+    challenge.isCompleted = false
+  }
 }

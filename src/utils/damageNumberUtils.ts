@@ -118,14 +118,18 @@ export const renderDamageNumbers = (ctx: CanvasRenderingContext2D): void => {
       opacity = 1.0 - fadeProgress
     }
     
-    // Determine if this is a healing number (positive damage means healing)
+    // Determine the type of number (healing, max health boost, or damage)
     const isHealing = damageNumber.id.includes('healing_')
+    const isMaxHealthBoost = damageNumber.id.includes('maxhealth_')
     
-    // Draw damage/healing number
+    // Draw damage/healing/boost number
     ctx.save()
     if (isHealing) {
       ctx.fillStyle = `rgba(0, 220, 0, ${opacity})` // Bright green for healing
       ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})` // Black outline
+    } else if (isMaxHealthBoost) {
+      ctx.fillStyle = `rgba(60, 160, 255, ${opacity})` // Bright blue for max health boost
+      ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})` // Black outline  
     } else {
       ctx.fillStyle = `rgba(220, 20, 20, ${opacity})` // Bright red for damage
       ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})` // Black outline
@@ -136,7 +140,14 @@ export const renderDamageNumbers = (ctx: CanvasRenderingContext2D): void => {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     
-    const numberText = isHealing ? `+${damageNumber.damage}` : `-${damageNumber.damage}`
+    let numberText: string
+    if (isHealing) {
+      numberText = `+${damageNumber.damage}` // Green +2 (healing)
+    } else if (isMaxHealthBoost) {
+      numberText = `+${damageNumber.damage} MAX` // Blue +1 MAX (max health boost)
+    } else {
+      numberText = `-${damageNumber.damage}` // Red -3 (damage)
+    }
     
     // Draw text with outline
     ctx.strokeText(numberText, damageNumber.currentX, damageNumber.currentY)
@@ -164,6 +175,26 @@ export const spawnHealingNumber = (x: number, y: number, healAmount: number): vo
   }
   
   damageNumbers.push(healingNumber)
+}
+
+/**
+ * Spawn a blue max health boost number at specific canvas coordinates
+ */
+export const spawnMaxHealthBoostNumber = (x: number, y: number, boostAmount: number): void => {
+  const boostNumber: DamageNumber = {
+    id: `maxhealth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    uuid: generateUUID(),
+    damage: boostAmount, // Use damage field for boost amount
+    startX: x,
+    startY: y,
+    currentX: x,
+    currentY: y,
+    startTime: Date.now(),
+    duration: DAMAGE_NUMBER_DURATION_MS,
+    isActive: true
+  }
+  
+  damageNumbers.push(boostNumber)
 }
 
 /**

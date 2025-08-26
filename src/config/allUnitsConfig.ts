@@ -289,3 +289,26 @@ export const getAnyUnitById = (id: string): AllyUnitType | EnemyUnitType | undef
 export const getSpawnableEnemyUnits = (): EnemyUnitType[] => {
   return Object.values(ENEMY_UNITS).filter(unit => unit.spawnChance > 0)
 }
+
+// ============ UNIT DESCRIPTIONS ============
+// Brief descriptions for bestiary/glossary feature
+export const ALLY_DESCRIPTIONS: Record<string, string> = {
+  SWORDSMAN: "Basic melee fighter. Attacks adjacent enemies.",
+  BOWMAN: "Ranged archer. Shoots arrows that stop on first hit.", 
+  MONK: "Support healer. Restores health to wounded allies on same wall.",
+  LANCER: "Upgraded bowman. Throws penetrating spears through multiple enemies.",
+  BARBARIAN: "Upgraded swordsman. Area damage to main target and adjacent cells.",
+  BISHOP: "Upgraded monk. Heals across all walls and boosts max health."
+}
+
+export const ENEMY_DESCRIPTIONS: Record<string, string> = {
+  SKULL: "Tiny floating menace. Fast and fragile.",
+  SLIME: "Gelatinous 2x2 blob. Slow but sturdy.",
+  SERPENT: "Long 3x1 snake. Slithers horizontally.",
+  LICH: "Tall 1x2 necromancer. Spawns skeleton minions when blocked.",
+  OGRE: "Massive 3x3 brute. Tremendous health and size.", 
+  ICE_GOLEM: "Towering 2x3 ice giant. Launches icicles upon death.",
+  SKELETON: "Lich's undead minion. Spawned when lich cannot advance.",
+  SPIDER_LARGE: "Giant 4x4 arachnid. Splits into smaller spiders when killed.",
+  SPIDER_SMALL: "Tiny spider offspring. Spawned from large spider death."
+}

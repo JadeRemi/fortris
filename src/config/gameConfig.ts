@@ -101,15 +101,23 @@ export const NOISE_DENSITY = 0.15 // 15% noise coverage
 export const NOISE_PIXEL_SIZE = 4
 
 // Unit configuration
-export const INITIAL_SWORDSMAN_COUNT = 10
-export const INITIAL_BOWMAN_COUNT = 10
-export const INITIAL_MONK_COUNT = 10
+export const INITIAL_SWORDSMAN_COUNT = 6
+export const INITIAL_BOWMAN_COUNT = 6  
+export const INITIAL_MONK_COUNT = 4
+
+// Unit purchase prices
+export const SWORDSMAN_PRICE = 20
+export const BOWMAN_PRICE = 20
+export const MONK_PRICE = 20
+
+// Buy button price display
+export const BUY_BUTTON_COIN_ICON_SIZE = 16 // Size of coin icon on Buy buttons
 
 // Combat system configuration
 export const TURN_COOLDOWN_MS = 500 // 0.5 seconds between turns
 export const UNIT_ACTION_DELAY_MS = 100 // 0.1 seconds between unit actions
 export const ATTACK_ANIMATION_DURATION_MS = 1000 // 1 second golden border animation
-export const HIT_ANIMATION_DURATION_MS = 800 // 0.8 seconds red hit animation (faster)
+export const HIT_ANIMATION_DURATION_MS = 500 // 0.5 seconds red hit animation (shorter)
 export const PROJECTILE_LIFESPAN_MS = 5000 // 5 seconds arrow lifespan
 export const PROJECTILE_SPEED = 400 // pixels per second (2x faster)
 export const PROJECTILE_SIZE_RATIO = 1/3 // 1/3 of cell size
@@ -119,6 +127,12 @@ export const MONK_HEALING_AMOUNT = 2 // Amount of health monks restore per heal
 
 // Enemy projectile configuration
 export const ICICLE_DAMAGE = 4 // Damage dealt by enemy icicle projectiles
+
+// Unit upgrade configuration
+export const LANCER_DAMAGE_MULTIPLIER = 2 // 2x bowman damage
+export const BARBARIAN_DAMAGE_MULTIPLIER = 2 // 2x swordsman damage  
+export const BARBARIAN_MAIN_TARGET_MULTIPLIER = 2 // Main target gets 2x barbarian damage
+export const BISHOP_MAX_HEALTH_BOOST = 1 // Amount to increase ally max health
 
 // Enemy spawn configuration - independent spawn system
 export const MIN_ENEMY_SPAWNS_PER_TURN = 0 // Minimum enemies that can spawn per turn
@@ -150,6 +164,10 @@ export const CHECKMARK = '✓'   // U+2713
 // Challenge target constants for easy customization
 export const CHALLENGE_TARGETS = {
   BISHOPS_COUNT: 5, // Target number of bishops for the "Have X Bishops" challenge
+  OGRES_KILLED: 50, // Target number of ogres to kill
+  MONKS_BOUGHT: 30, // Target number of monks to buy
+  UNITS_REACH_200_HEALTH: 1, // Target number of units reaching 200 health
+  SPEAR_MULTIKILLS: 1, // Target number of times killing 5 enemies with 1 spear
   // Add more challenge targets here as needed
 } as const
 

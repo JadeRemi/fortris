@@ -6,6 +6,7 @@ import { renderEnemyHealthNumbers } from './enemyUtils'
 import { generateUUID } from './uuidUtils'
 import { addLogMessage } from './logsUtils'
 import { ROMAN_NUMERALS, UI_FONT_SIZE_HEALTH, UI_FONT_SIZE_TIER } from '../config/gameConfig'
+import { COMBAT_MESSAGES } from '../config/messages'
 import {
   LEVEL_HEIGHT,
   LEVEL_WIDTH,
@@ -561,7 +562,7 @@ export const upgradeWallUnit = (wallType: 'left' | 'right' | 'bottom', cellIndex
   cell.currentHealth = currentHealth // Preserve current health
   
   // Add upgrade log message
-  addLogMessage(`${currentUnitType.name} is upgraded to ${upgradedUnitType.name}`)
+  addLogMessage(COMBAT_MESSAGES.unitUpgraded(currentUnitType.name, upgradedUnitType.name))
   
   console.log(`🔧 Upgraded ${currentUnitId} → ${upgradedUnitId} (health: ${currentHealth}/${upgradedUnitType.maxHealth})`)
   
